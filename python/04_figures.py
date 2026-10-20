@@ -100,14 +100,32 @@ def fig_scatter(ts: pl.DataFrame, summ: pl.DataFrame) -> go.Figure:
         x=[100 * x for x in xs], y=[lib.expected_kills(100, x)[0] for x in xs], mode="lines",
         name="Independent possessions (100 a game)", line=dict(color=GREY, dash="dot"),
         hovertemplate="stops %{x:.1f}%: %{y:.2f} kills per 100<extra></extra>"))
-    # Name each league's highest and lowest kill rate where it sits.
+    # Name each league's highest and lowest kill rate. The cloud runs up the
+    # diagonal, so a "best" label goes up and left of its point and a
+    # "lowest" label down and right, into empty space; the named points are
+    # redrawn solid so each label has a visible anchor.
     for lg, name in LEAGUES.items():
         r = ts.filter(pl.col("league") == lg).sort("kill_rate")
         lo, hi = r.row(0, named=True), r.row(-1, named=True)
-        note(f, 100 * hi["stop_rate"], hi["kill_rate"], f"{name} best: {hi['season']} {hi['team']}",
-             color=COLORS[lg], xanchor="right", xshift=-8)
+        f.add_trace(go.Scatter(
+            x=[100 * hi["stop_rate"], 100 * lo["stop_rate"]], y=[hi["kill_rate"], lo["kill_rate"]],
+            mode="markers", showlegend=False, hoverinfo="skip",
+            marker=dict(size=9, color=COLORS[lg], opacity=1)))
+        hx, hy = 100 * hi["stop_rate"], hi["kill_rate"]
+        if lg == "nba":
+            # The NBA's best sits inside the WNBA cloud: move its label up and
+            # left into the empty space above the diagonal, with a leader line.
+            lx, ly = hx - 2.5, hy + 0.6
+            f.add_trace(go.Scatter(x=[lx + 0.1, hx], y=[ly - 0.05, hy], mode="lines",
+                                   showlegend=False, hoverinfo="skip",
+                                   line=dict(color=COLORS[lg], width=1)))
+            note(f, lx, ly, f"{name} best: {hi['season']} {hi['team']}", color=COLORS[lg],
+                 xanchor="right", yanchor="middle")
+        else:
+            note(f, hx, hy, f"{name} best: {hi['season']} {hi['team']}",
+                 color=COLORS[lg], xanchor="right", yanchor="bottom", xshift=-6, yshift=6)
         note(f, 100 * lo["stop_rate"], lo["kill_rate"], f"{name} lowest: {lo['season']} {lo['team']}",
-             color=COLORS[lg], xanchor="left", xshift=8)
+             color=COLORS[lg], xanchor="left", yanchor="top", xshift=6, yshift=-6)
     r2 = {r["league"]: r["r2_stop_kill"] for r in summ.iter_rows(named=True)}
     f.update_layout(**base_layout(f"Kill rate is stop rate: it explains {r2['nba']:.0%} (NBA) and "
                                   f"{r2['wnba']:.0%} (WNBA) of the variation",
@@ -319,15 +337,16 @@ def fig_leaders(lead: pl.DataFrame, ts: pl.DataFrame, summ: pl.DataFrame) -> go.
         customdata=[[100 * r["stop_rate"], r["z_game"]] for r in rows],
         hovertemplate="%{y}: %{x:.2f} kills per 100, stops %{customdata[0]:.1f}%, "
                       "z %{customdata[1]:.2f}<extra></extra>"))
-    f.add_vline(x=avg, line=dict(color=GREY, width=1.5, dash="dash"))
-    note(f, avg, 0.02, f"{LEAGUES[lg]} average {avg:.2f}", color=GREY, xanchor="left",
-         yref="paper", yanchor="bottom")
+    # The league average sits far left of every dumbbell; drawing it as a
+    # line left most of the plot empty, so it is a note at the left edge.
+    note(f, 0, 1.0, f"← {LEAGUES[lg]} average: {avg:.2f} per 100, off this scale",
+         color=GREY, xanchor="left", xref="paper", yref="paper", yanchor="top")
     worst = int(top["stop_rank"].max())
     f.update_layout(**base_layout(
         f"The {top.height} best NBA kill rates all come from top-{worst} stop rates "
         f"(of {n} team-seasons)", "Kills per 100 opponent possessions", "", height=470))
     xs = top["kill_rate"].to_list() + top["exp_rate"].to_list()
-    f.update_xaxes(range=[avg - 0.2, max(xs) + 0.15])
+    f.update_xaxes(range=[min(xs) - 0.1, max(xs) + 0.1])
     f.update_layout(margin=dict(l=210, r=30, t=70, b=60))
     return f
 
