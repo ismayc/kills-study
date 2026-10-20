@@ -55,18 +55,24 @@
   --surface: #faf9f6; --surface-2: #f2f1ea; --rule: #e1e0d9;
   --accent: #eb6834; --accent-ink: #a83f12; --fig-surface: #fcfcfb;
   --ease: cubic-bezier(.22, .61, .36, 1);
+  --dg-box: #f2f1ea; --c1: #2a78d6; --c2: #eb6834; --c3: #1baf7a;
+  --c4: #eda100; --c8: #e34948;
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
     --ink: #f5f3ec; --ink-2: #c3c2b7; --ink-3: #898781;
     --surface: #0f0e0d; --surface-2: #1a1a19; --rule: #2c2c2a;
     --accent: #d95926; --accent-ink: #ea9066; --fig-surface: #1a1a19;
+    --dg-box: #2a2a28; --c1: #3987e5; --c2: #d95926; --c3: #199e70;
+    --c4: #c98500; --c8: #e66767;
   }
 }
 :root[data-theme="dark"] {
   --ink: #f5f3ec; --ink-2: #c3c2b7; --ink-3: #898781;
   --surface: #0f0e0d; --surface-2: #1a1a19; --rule: #2c2c2a;
   --accent: #d95926; --accent-ink: #ea9066; --fig-surface: #1a1a19;
+  --dg-box: #2a2a28; --c1: #3987e5; --c2: #d95926; --c3: #199e70;
+  --c4: #c98500; --c8: #e66767;
 }
 * { box-sizing: border-box; }
 img { max-width: 100%; height: auto; }
@@ -149,6 +155,34 @@ hr { border: none; border-top: 1px solid var(--rule); margin: 2rem 0; }
 .figure-card iframe { display: block; width: 100%; height: 560px;
   border: none; padding: .75rem 1rem 0 1.1rem;
   background: var(--fig-surface); }
+/* inline explainer diagrams (famdiagram.py): colors are page tokens, so
+   they follow the theme; the narrow layout replaces the wide one on phones */
+.diagram-card .dg-wrap { padding: 1rem 1.1rem .6rem; }
+.diagram-card svg.dg { display: block; width: 100%; height: auto; }
+.diagram-card .dg-narrow { display: none; }
+@media (max-width: 640px) {
+  .diagram-card .dg-has-narrow .dg-wide { display: none; }
+  .diagram-card .dg-has-narrow .dg-narrow { display: block; }
+  .diagram-card .dg-wrap { padding: .7rem .6rem .4rem; }
+}
+.dg .dg-text { font-family: system-ui, -apple-system, "Segoe UI", Helvetica,
+  Arial, sans-serif; }
+.dg .dg-display { font-family: "Barlow Condensed", system-ui, sans-serif;
+  font-weight: 600; letter-spacing: .01em; }
+.dg-f-ink { fill: var(--ink); } .dg-s-ink { stroke: var(--ink); }
+.dg-f-ink2 { fill: var(--ink-2); } .dg-s-ink2 { stroke: var(--ink-2); }
+.dg-f-ink3 { fill: var(--ink-3); } .dg-s-ink3 { stroke: var(--ink-3); }
+.dg-f-rule { fill: var(--rule); } .dg-s-rule { stroke: var(--rule); }
+.dg-f-surface { fill: var(--fig-surface); } .dg-s-surface { stroke: var(--fig-surface); }
+.dg-f-surface2 { fill: var(--dg-box); } .dg-s-surface2 { stroke: var(--dg-box); }
+.dg-f-accent { fill: var(--accent); } .dg-s-accent { stroke: var(--accent); }
+.dg-f-nba { fill: var(--c1); } .dg-s-nba { stroke: var(--c1); }
+.dg-f-wnba { fill: var(--c2); } .dg-s-wnba { stroke: var(--c2); }
+.dg-f-c3 { fill: var(--c3); } .dg-s-c3 { stroke: var(--c3); }
+.dg-f-c4 { fill: var(--c4); } .dg-s-c4 { stroke: var(--c4); }
+.dg-f-c8 { fill: var(--c8); } .dg-s-c8 { stroke: var(--c8); }
+.dg-f-none { fill: none; } .dg-s-none { stroke: none; }
+.dg line, .dg path { stroke-linecap: round; stroke-linejoin: round; }
 .figure-card figcaption { padding: .55rem .9rem; font-size: .85rem;
   color: var(--ink-3); border-top: 1px solid var(--rule);
   background: var(--surface); }
@@ -261,10 +295,11 @@ play-by-play score timeline. Every three straight stops is a kill: six in a
 row are two kills, and five are one. A streak carries across quarters and
 ends at the final buzzer. These rules were fixed on October 19, 2026,
 before any result was computed.</p>
+<figure class="figure-card diagram-card"><div class="dg-wrap"><div class="dg-has-narrow"><div class="dg-wide"><svg xmlns="http://www.w3.org/2000/svg" class="dg" viewBox="0 0 900 279.286" role="img" aria-label="What counts as a kill"><title>What counts as a kill</title><defs><marker id="dg-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="dg-f-ink3"/></marker></defs><text x="20" y="23.8" font-size="19.55" class="dg-f-ink dg-text" font-weight="600">HOU defense against POR, November 22, 2024</text><text x="20" y="47.6" font-size="17" class="dg-f-ink2 dg-text">14 POR possessions in a row</text><rect x="580" y="32.3" width="17" height="17" class="dg-f-nba" rx="3"/><text x="603.8" y="47.6" font-size="17" class="dg-f-ink2 dg-text">stop</text><rect x="690" y="32.3" width="17" height="17" class="dg-f-surface2 dg-s-ink3" rx="3" stroke-width="1.5"/><text x="713.8" y="47.6" font-size="17" class="dg-f-ink2 dg-text">score (points)</text><rect x="20" y="105.4" width="55.8571" height="44.6857" class="dg-f-surface2 dg-s-ink3" rx="4" stroke-width="1.5"/><text x="47.9286" y="134.203" font-size="17" class="dg-f-ink dg-text" text-anchor="middle" font-weight="600">2</text><rect x="81.8571" y="105.4" width="55.8571" height="44.6857" class="dg-f-nba" rx="4"/><rect x="143.714" y="105.4" width="55.8571" height="44.6857" class="dg-f-nba" rx="4"/><rect x="205.571" y="105.4" width="55.8571" height="44.6857" class="dg-f-nba" rx="4"/><rect x="267.429" y="105.4" width="55.8571" height="44.6857" class="dg-f-nba" rx="4"/><rect x="329.286" y="105.4" width="55.8571" height="44.6857" class="dg-f-nba" rx="4"/><rect x="391.143" y="105.4" width="55.8571" height="44.6857" class="dg-f-nba" rx="4"/><rect x="453" y="105.4" width="55.8571" height="44.6857" class="dg-f-surface2 dg-s-ink3" rx="4" stroke-width="1.5"/><text x="480.929" y="134.203" font-size="17" class="dg-f-ink dg-text" text-anchor="middle" font-weight="600">2</text><rect x="514.857" y="105.4" width="55.8571" height="44.6857" class="dg-f-nba" rx="4"/><rect x="576.714" y="105.4" width="55.8571" height="44.6857" class="dg-f-nba" rx="4"/><rect x="638.571" y="105.4" width="55.8571" height="44.6857" class="dg-f-nba" rx="4"/><rect x="700.429" y="105.4" width="55.8571" height="44.6857" class="dg-f-nba" rx="4"/><rect x="762.286" y="105.4" width="55.8571" height="44.6857" class="dg-f-nba" rx="4"/><rect x="824.143" y="105.4" width="55.8571" height="44.6857" class="dg-f-surface2 dg-s-ink3" rx="4" stroke-width="1.5"/><text x="852.071" y="134.203" font-size="17" class="dg-f-ink dg-text" text-anchor="middle" font-weight="600">3</text><text x="20" y="96.9" font-size="17" class="dg-f-ink3 dg-text" font-weight="600">Q3</text><text x="329.286" y="96.9" font-size="17" class="dg-f-ink3 dg-text" font-weight="600">Q4</text><line x1="326.286" y1="81.6" x2="326.286" y2="156.886" stroke-width="2" class="dg-s-ink2" stroke-dasharray="4 3"/><path d="M83.9,157.0 V162.0 H259.4 V157.0" stroke-width="2" class="dg-f-none dg-s-nba"/><text x="171.643" y="182.386" font-size="17" class="dg-f-nba dg-text" text-anchor="middle" font-weight="600">kill 1</text><path d="M269.4,157.0 V162.0 H445.0 V157.0" stroke-width="2" class="dg-f-none dg-s-nba"/><text x="357.214" y="182.386" font-size="17" class="dg-f-nba dg-text" text-anchor="middle" font-weight="600">kill 2</text><text x="81.8571" y="211.286" font-size="17" class="dg-f-ink dg-text" font-weight="600">6 straight stops = 2 kills</text><text x="81.8571" y="233.386" font-size="17" class="dg-f-ink2 dg-text">across the break (4 + 2; 1 if it reset)</text><path d="M516.9,157.0 V162.0 H692.4 V157.0" stroke-width="2" class="dg-f-none dg-s-nba"/><text x="604.643" y="182.386" font-size="17" class="dg-f-nba dg-text" text-anchor="middle" font-weight="600">kill</text><text x="759.286" y="182.386" font-size="17" class="dg-f-ink3 dg-text" text-anchor="middle">no kill</text><text x="514.857" y="211.286" font-size="17" class="dg-f-ink dg-text" font-weight="600">5 straight stops = 1 kill</text><text x="514.857" y="233.386" font-size="17" class="dg-f-ink2 dg-text">the last 2 start nothing</text></svg></div><div class="dg-narrow"><svg xmlns="http://www.w3.org/2000/svg" class="dg" viewBox="0 0 360 326.488" role="img" aria-label="What counts as a kill"><title>What counts as a kill</title><defs><marker id="dg-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="dg-f-ink3"/></marker></defs><text x="12" y="17.5" font-size="14.375" class="dg-f-ink dg-text" font-weight="600">HOU defense against POR, November 22, 2024</text><text x="12" y="35" font-size="12.5" class="dg-f-ink2 dg-text">14 POR possessions in a row</text><rect x="12" y="77.5" width="37.625" height="35.7437" class="dg-f-surface2 dg-s-ink3" rx="4" stroke-width="1.5"/><text x="30.8125" y="100.122" font-size="12.5" class="dg-f-ink dg-text" text-anchor="middle" font-weight="600">2</text><rect x="54.625" y="77.5" width="37.625" height="35.7437" class="dg-f-nba" rx="4"/><rect x="97.25" y="77.5" width="37.625" height="35.7437" class="dg-f-nba" rx="4"/><rect x="139.875" y="77.5" width="37.625" height="35.7437" class="dg-f-nba" rx="4"/><rect x="182.5" y="77.5" width="37.625" height="35.7437" class="dg-f-nba" rx="4"/><rect x="225.125" y="77.5" width="37.625" height="35.7437" class="dg-f-nba" rx="4"/><rect x="267.75" y="77.5" width="37.625" height="35.7437" class="dg-f-nba" rx="4"/><rect x="310.375" y="77.5" width="37.625" height="35.7437" class="dg-f-surface2 dg-s-ink3" rx="4" stroke-width="1.5"/><text x="329.188" y="100.122" font-size="12.5" class="dg-f-ink dg-text" text-anchor="middle" font-weight="600">2</text><rect x="12" y="195.744" width="37.625" height="35.7437" class="dg-f-nba" rx="4"/><rect x="54.625" y="195.744" width="37.625" height="35.7437" class="dg-f-nba" rx="4"/><rect x="97.25" y="195.744" width="37.625" height="35.7437" class="dg-f-nba" rx="4"/><rect x="139.875" y="195.744" width="37.625" height="35.7437" class="dg-f-nba" rx="4"/><rect x="182.5" y="195.744" width="37.625" height="35.7437" class="dg-f-nba" rx="4"/><rect x="225.125" y="195.744" width="37.625" height="35.7437" class="dg-f-surface2 dg-s-ink3" rx="4" stroke-width="1.5"/><text x="243.938" y="218.366" font-size="12.5" class="dg-f-ink dg-text" text-anchor="middle" font-weight="600">3</text><text x="12" y="71.25" font-size="12.5" class="dg-f-ink3 dg-text" font-weight="600">Q3</text><text x="225.125" y="71.25" font-size="12.5" class="dg-f-ink3 dg-text" font-weight="600">Q4</text><line x1="222.625" y1="60" x2="222.625" y2="118.244" stroke-width="2" class="dg-s-ink2" stroke-dasharray="4 3"/><text x="12" y="189.494" font-size="12.5" class="dg-f-ink3 dg-text" font-weight="600">Q4</text><path d="M56.6,117.0 V122.0 H175.5 V117.0" stroke-width="2" class="dg-f-none dg-s-nba"/><text x="116.062" y="136.994" font-size="12.5" class="dg-f-nba dg-text" text-anchor="middle" font-weight="600">kill 1</text><path d="M184.5,117.0 V122.0 H303.4 V117.0" stroke-width="2" class="dg-f-none dg-s-nba"/><text x="243.938" y="136.994" font-size="12.5" class="dg-f-nba dg-text" text-anchor="middle" font-weight="600">kill 2</text><text x="54.625" y="158.244" font-size="12.5" class="dg-f-ink dg-text" font-weight="600">6 straight stops = 2 kills</text><text x="54.625" y="174.494" font-size="12.5" class="dg-f-ink2 dg-text">across the break (4 + 2; 1 if it reset)</text><path d="M14.0,235.2 V240.2 H132.9 V235.2" stroke-width="2" class="dg-f-none dg-s-nba"/><text x="73.4375" y="255.238" font-size="12.5" class="dg-f-nba dg-text" text-anchor="middle" font-weight="600">kill</text><text x="180" y="255.238" font-size="12.5" class="dg-f-ink3 dg-text" text-anchor="middle">no kill</text><text x="12" y="276.488" font-size="12.5" class="dg-f-ink dg-text" font-weight="600">5 straight stops = 1 kill</text><text x="12" y="292.738" font-size="12.5" class="dg-f-ink2 dg-text">the last 2 start nothing</text><rect x="12" y="304.613" width="12.5" height="12.5" class="dg-f-nba" rx="3"/><text x="29.5" y="315.238" font-size="12.5" class="dg-f-ink2 dg-text">stop</text><rect x="74.5" y="304.613" width="12.5" height="12.5" class="dg-f-surface2 dg-s-ink3" rx="3" stroke-width="1.5"/><text x="92" y="315.238" font-size="12.5" class="dg-f-ink2 dg-text">score (points)</text></svg></div></div></div><figcaption>A real stretch of Houston's defense against Portland on November 22, 2024, one cell per Portland possession. Six straight stops that straddle the break between the third and fourth quarters make two kills, because the count carries over (a reset would leave one). The next five straight stops make one kill, and the last two start nothing.</figcaption></figure>
 <p>The archive stops at NBA 2024-25 and WNBA 2025. The two newest seasons come
 from a second possession builder, corrected two ways and checked against
 the archive on four seasons both sources cover (the last section below).
-Possession points capture at least 99.86% of every season's points; the rest
+Possession points capture at least 99.85% of every season's points; the rest
 are free throws that belong to no possession. Every table was computed in
 Python and again in R, and the two agree on every cell.</p>
 <div class="eyebrow beat" id="kills-and-stops">Kills and stops</div>
@@ -275,7 +310,7 @@ Python and again in R, and the two agree on every cell.</p>
 86% of the variation in kill rate. The WNBA's higher kill rate (7.93 per 100
 opponent possessions, against 6.87 in the NBA) comes with a higher stop rate
 (52.5% against 49.6%).</p>
-<figure class="figure-card"><iframe src="figures/fig1_kill_vs_stop_py.html" loading="lazy" style="height:456px" title="Kill vs stop"></iframe><figcaption>Kill rate against stop rate for every team-season. The points hug the dotted line that independent possessions would give, and the WNBA sits further up the same line because its defenses stop more possessions.</figcaption></figure>
+<figure class="figure-card"><iframe src="figures/fig1_kill_vs_stop_py.html" loading="lazy" style="height:456px" title="Kill vs stop"></iframe><figcaption>Kill rate against stop rate for every team-season, with each league's highest and lowest kill rate named. The points hug the dotted line that independent possessions would give, the named extremes sit at the ends of that line rather than off it, and the WNBA sits further up the same line because its defenses stop more possessions.</figcaption></figure>
 <div class="eyebrow beat" id="streakiness">Streakiness</div>
 
 <h2>Stops do not cluster</h2>
@@ -284,6 +319,11 @@ together. If every ordering of a game's own stops were equally likely, how
 many kills should a team have had? An exact calculation answers that, and
 because it keeps each game's stop count, it already absorbs opponent
 strength, pace, and blowouts.</p>
+<p>The chart below runs that calculation for the NBA's best kill defense, and
+it shows why the order of stops, not their number, is the test: Milwaukee's
+kill total sits inside what its own stops give in random order, far above
+what an average defense would get from the same possessions.</p>
+<figure class="figure-card"><iframe src="figures/fig4_perm_baseline_py.html" loading="lazy" style="height:436px" title="Perm baseline"></iframe><figcaption>The bars are the exact distribution of 2019-20 Milwaukee's season kill total if each game's own stops fell in a random order. Its observed total (solid line) sits inside that distribution, slightly below its center. A league-average kill rate over the same possessions (dotted line) lands far to the left: the distance from average is stop rate, and the order of the stops adds nothing.</figcaption></figure>
 <div class="tablewrap"><table>
 <thead>
 <tr>
@@ -321,7 +361,7 @@ stops together more than its stop rate implies. The WNBA's pooled count
 sits at chance. The NBA's is slightly below it, with 18 of 26 seasons under
 zero: stops alternate with scores a little more often than random order
 would give, by a fraction of a percent. The cause is not tested here.</p>
-<figure class="figure-card"><iframe src="figures/fig2_streak_z_py.html" loading="lazy" style="height:456px" title="Streak z"></iframe><figcaption>Each league-season's z for observed against random-order kills. Seasons scatter around zero inside the dashed lines at plus and minus 1.96; two NBA seasons, 2018-19 (z -2.46) and 2023-24 (z -1.99), fall just below them.</figcaption></figure>
+<figure class="figure-card"><iframe src="figures/fig2_streak_z_py.html" loading="lazy" style="height:456px" title="Streak z"></iframe><figcaption>Each league-season's z for observed against random-order kills. Seasons scatter around zero inside the dotted lines at plus and minus 1.96; two NBA seasons, 2018-19 (z -2.46) and 2023-24 (z -1.99), fall just below them.</figcaption></figure>
 <figure class="figure-card"><iframe src="figures/fig3_kill_rate_py.html" loading="lazy" style="height:456px" title="Kill rate"></iframe><figcaption>Kills per 100 opponent possessions by season, observed (solid) against the random-order expectation (dotted). The two lines track each other closely; the year-to-year swings come from stop rates, not from streaks.</figcaption></figure>
 <p>A first version of this test gave each possession its game's stop rate as
 an independent chance, and it made every NBA season look anti-streaky. That
@@ -335,6 +375,10 @@ stop rate of any NBA team-season here (54.6%), and its own streakiness z is
 -0.73. In the WNBA, 2021 Connecticut leads at 9.88 with the league's best
 stop rate (57.2%) and a streakiness z of +0.73. The 2003-04 NBA season holds
 four of the top seven spots (Detroit, San Antonio, New Jersey, and Indiana).</p>
+<p>The Milwaukee comparison above holds across the NBA's top ten: each kill
+rate sits close to what its own stops give in random order, and the distance
+from the league average comes from stopping more possessions.</p>
+<figure class="figure-card"><iframe src="figures/fig6_leaders_py.html" loading="lazy" style="height:486px" title="Leaders"></iframe><figcaption>The ten best NBA kill rates (dark dots) beside the rate each team's own stops give in random order (light dots), with each team-season's stop-rate rank among all 776 NBA team-seasons. Every one is a top-20 stop defense, and the gaps between observed and random order run in both directions.</figcaption></figure>
 <p>Of the NBA's top ten, one team-season clears 1.96 on streakiness: 2000-01
 San Antonio, at 8.43 kills per 100 and a z of +2.66. The highest of any
 team-season is 2012 Los Angeles in the WNBA at +3.03, and the lowest is
@@ -349,6 +393,7 @@ on December 6, 2009, from 4:13 of the first quarter to 5:42 of the second,
 also from 7 down. The WNBA record is 21, also reached twice: Minnesota
 against Indiana on August 18, 2017, and Indiana against Seattle on June 22,
 2023.</p>
+<figure class="figure-card"><iframe src="figures/fig5_record_margin_py.html" loading="lazy" style="height:436px" title="Record margin"></iframe><figcaption>The Clippers' score margin through the March 1, 2006 game against New Orleans/Oklahoma City. The shaded span is the 22 straight scoreless opponent possessions, from 7:45 of the third quarter to 7:50 of the fourth; the Clippers went from 7 points down to 15 up inside it and won by 22.</figcaption></figure>
 <div class="eyebrow beat" id="newest-seasons">Newest seasons</div>
 
 <h2>A second possession source, checked before it was used</h2>

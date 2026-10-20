@@ -27,6 +27,10 @@ echo "=== kills: team seasons, baselines, records reproduce ==="
 $PY -I python/02_kills.py --check | tail -1
 
 echo
+echo "=== examples: the story's strip, record game, and random-order distribution ==="
+$PY -I python/07_examples.py --check | tail -1
+
+echo
 echo "=== reconciliation: R vs Python, every table ==="
 Rscript R/kills.R >/dev/null
 $PY -I python/03_reconcile.py | tail -1

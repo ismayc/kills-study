@@ -270,6 +270,43 @@ def expected_kills_perm(n: int, S: int) -> tuple[float, float]:
     return mean, float(M2[S].sum()) - mean * mean
 
 
+@lru_cache(maxsize=None)
+def kills_pmf_perm(n: int, S: int) -> tuple[float, ...]:
+    """The full distribution behind expected_kills_perm: P(K = k) for
+    k = 0..S // 3 when a game's S stops among its n opponent possessions fall
+    in a uniformly random order. Same DP, with the kill count k added to the
+    state (stops drawn so far, run length mod 3, kills so far)."""
+    K = S // 3
+    if S == 0 or n == 0:
+        return (1.0,)
+    P = np.zeros((S + 1, 3, K + 1))
+    P[0, 0, 0] = 1.0
+    s = np.arange(S + 1, dtype=float)
+    for i in range(n):
+        left = n - i
+        pstop = np.clip((S - s) / left, 0.0, 1.0)[:, None]
+        pscore = 1.0 - pstop
+        nP = np.zeros_like(P)
+        # a score: same stops drawn, run back to 0, no kill
+        nP[:, 0, :] += pscore * P.sum(axis=1)
+        # a stop: one more stop drawn; the third in a row adds a kill
+        nP[1:, 1, :] += (pstop * P[:, 0, :])[:-1]
+        nP[1:, 2, :] += (pstop * P[:, 1, :])[:-1]
+        nP[1:, 0, 1:] += (pstop * P[:, 2, :])[:-1, :-1]
+        P = nP
+    return tuple(float(v) for v in P[S].sum(axis=0))
+
+
+def season_pmf_perm(games: list[tuple[int, int]]) -> np.ndarray:
+    """P(total kills = k), k = 0, 1, ..., for a team-season whose games are
+    (n, S) pairs, each game's stops in a random order independently of the
+    others: the convolution of the games' kills_pmf_perm."""
+    out = np.array([1.0])
+    for n, S in games:
+        out = np.convolve(out, np.array(kills_pmf_perm(int(n), int(S))))
+    return out
+
+
 def streak_table(seq: pl.DataFrame) -> pl.DataFrame:
     """Every run of stops in a defense's game sequence. seq: one row per
     opponent possession with gameId, dfn, ord, stop, period, start, end,

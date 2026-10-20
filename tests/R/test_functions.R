@@ -31,6 +31,27 @@ test_that("permutation DP matches enumeration", {
   }
 })
 
+test_that("permutation PMF matches enumeration", {
+  for (n in 1:9) for (S in 0:n) {
+    k <- if (S == 0) 0 else apply(combn(n, S), 2, function(pos) { x <- rep(0, n); x[pos] <- 1; kills_of(x) })
+    pmf <- kills_pmf_perm(n, S)
+    expect_equal(length(pmf), S %/% 3 + 1)
+    expect_equal(pmf, as.numeric(table(factor(k, levels = 0:(S %/% 3)))) / length(k), tolerance = 1e-12)
+  }
+})
+
+test_that("season PMF is the convolution and keeps the moments", {
+  n <- c(7, 9, 5, 100); S <- c(4, 6, 5, 50)
+  pmf <- season_pmf_perm(n, S)
+  k <- seq_along(pmf) - 1
+  m <- sum(k * pmf)
+  e <- rowSums(mapply(expected_kills_perm, n, S))
+  expect_equal(sum(pmf), 1, tolerance = 1e-12)
+  expect_equal(m, e[1], tolerance = 1e-9)
+  expect_equal(sum(k^2 * pmf) - m^2, e[2], tolerance = 1e-9)
+  expect_equal(season_pmf_perm(5, 5), c(0, 1))
+})
+
 test_that("plugging in p overstates expected kills", {
   expect_gt(expected_kills(100, 0.5)[1], expected_kills_perm(100, 50)[1])
   expect_equal(expected_kills_perm(6, 6), c(2, 0))

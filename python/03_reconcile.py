@@ -25,6 +25,7 @@ PAIRS = {
     "season_records": ["league", "year"],
     "leaders": ["ranked_by", "league", "rank"],
     "summary": ["league"],
+    "perm_example": ["league", "season", "team", "kills"],
 }
 
 

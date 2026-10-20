@@ -97,7 +97,8 @@ one_season <- function(league, year) {
     mutate(league = lg, year = yr)
   meta <- fin |> filter(status == "ok") |>
     transmute(gameId, year = yr, game_date, home_id, away_id, abbr_h, abbr_a, league = lg)
-  list(val = val, ts = ts, st = st, meta = meta)
+  list(val = val, ts = ts, st = st, meta = meta,
+       tg = tg |> transmute(league = lg, year = yr, gameId, dfn, n, stops))
 }
 
 res <- unlist(lapply(names(YEARS), function(lg) lapply(YEARS[[lg]], function(y) one_season(lg, y))),
@@ -144,6 +145,19 @@ lead <- bind_rows(lapply(names(YEARS), function(lg) bind_rows(lapply(c("kill_rat
     transmute(ranked_by = by, rank = 1:15, league, season, team, kill_rate, kill_rate_z, stop_rate,
               pts_allowed_per100, z_game)))))
 write_csv(lead, "output/leaders_r.csv")
+
+# The exact random-order distribution of kills for the NBA's top kill rate
+# (python/07_examples.py writes the Python twin, perm_example.csv).
+top <- lead |> filter(ranked_by == "kill_rate", league == "nba", rank == 1)
+tsr <- ts |> filter(league == top$league, season == top$season, team == top$team)
+tgr <- bind_rows(lapply(res, `[[`, "tg")) |>
+  filter(league == tsr$league, year == tsr$year, dfn == tsr$team_id) |> arrange(gameId)
+pmf <- season_pmf_perm(tgr$n, tgr$stops)
+stopifnot(abs(sum((seq_along(pmf) - 1) * pmf) - tsr$exp_game) < 1e-6)
+ks <- (tsr$kills - 100):(tsr$kills + 100)
+ks <- ks[ks >= 0 & ks < length(pmf)]
+write_csv(tibble(league = tsr$league, season = tsr$season, team = tsr$team, kills = ks,
+                 prob = round(pmf[ks + 1], 15)), "output/perm_example_r.csv")
 
 summ <- bind_rows(lapply(names(YEARS), function(lg) {
   x <- ts |> filter(league == lg)

@@ -96,6 +96,47 @@ expected_kills_perm <- function(n, S) {
   c(m, sum(M2[S + 1, ]) - m * m)
 }
 
+# P(K = k), k = 0..S %/% 3, under the random-order baseline: the DP of
+# expected_kills_perm with the kill count added to the state.
+kills_pmf_perm <- function(n, S) {
+  K <- S %/% 3
+  if (S == 0 || n == 0) return(1)
+  # R0, R1, R2: (stops drawn) x (kills so far) for run length mod 3 = 0, 1, 2
+  R0 <- matrix(0, S + 1, K + 1); R1 <- R0; R2 <- R0
+  R0[1, 1] <- 1
+  s <- 0:S
+  up <- 2:(S + 1); dn <- 1:S
+  for (i in 0:(n - 1)) {
+    pstop <- pmin(pmax((S - s) / (n - i), 0), 1)
+    pscore <- 1 - pstop
+    a0 <- pstop * R0; a1 <- pstop * R1; a2 <- pstop * R2
+    N0 <- pscore * (R0 + R1 + R2)
+    N1 <- matrix(0, S + 1, K + 1); N2 <- N1
+    N1[up, ] <- a0[dn, , drop = FALSE]
+    N2[up, ] <- a1[dn, , drop = FALSE]
+    if (K > 0) N0[up, 2:(K + 1)] <- N0[up, 2:(K + 1)] + a2[dn, 1:K, drop = FALSE]
+    R0 <- N0; R1 <- N1; R2 <- N2
+  }
+  R0[S + 1, ] + R1[S + 1, ] + R2[S + 1, ]
+}
+
+# P(total kills = k), k = 0, 1, ..., for a team-season's games (vectors n and
+# S), each game's stops in a random order independently: the convolution of
+# the games' kills_pmf_perm, summed directly (no FFT).
+season_pmf_perm <- function(n, S) {
+  out <- 1
+  for (g in seq_along(n)) {
+    b <- kills_pmf_perm(n[g], S[g])
+    new <- rep(0, length(out) + length(b) - 1)
+    for (j in seq_along(b)) {
+      idx <- j:(j + length(out) - 1)
+      new[idx] <- new[idx] + out * b[j]
+    }
+    out <- new
+  }
+  out
+}
+
 streak_table <- function(seq) {
   seq |> group_by(gameId, dfn) |> mutate(brk = cumsum(stop == 0)) |>
     filter(stop == 1) |> group_by(gameId, dfn, brk) |>

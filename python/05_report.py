@@ -5,6 +5,7 @@ it is typed by hand. Replaces the text between <!-- gen:results --> and
 from __future__ import annotations
 
 import argparse
+import math
 import sys
 from pathlib import Path
 
@@ -45,7 +46,8 @@ def results() -> str:
         "game whose score passes the shared layer's checks "
         f"({vv['nba']['games_ok'] - vv['nba']['games'] + vv['wnba']['games_ok'] - vv['wnba']['games']} "
         "such games are missing from the possession sources). Possession points capture at least "
-        f"{min(vv['nba']['worst'], vv['wnba']['worst']):.2%} of every season's points; the rest are "
+        f"{math.floor(min(vv['nba']['worst'], vv['wnba']['worst']) * 1e4) / 100:.2f}% of every "
+        "season's points (rounded down, since it is a floor); the rest are "
         "free throws that belong to no possession (technicals, a period's first second). "
         "Every table is computed in Python and again in R, and the two agree on every cell.",
         "",

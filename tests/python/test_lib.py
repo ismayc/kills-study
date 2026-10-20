@@ -56,6 +56,32 @@ def test_permutation_dp_matches_enumeration(lib):
             assert ev == pytest.approx(sum(k * k for k in ks) / len(ks) - m * m, abs=1e-12)
 
 
+def test_permutation_pmf_matches_enumeration(lib):
+    for n in range(1, 10):
+        for S in range(n + 1):
+            ks = [lib.kills_of([1 if i in pos else 0 for i in range(n)])
+                  for pos in itertools.combinations(range(n), S)]
+            pmf = lib.kills_pmf_perm(n, S)
+            assert len(pmf) == S // 3 + 1
+            for k, pk in enumerate(pmf):
+                assert pk == pytest.approx(ks.count(k) / len(ks), abs=1e-12)
+
+
+def test_season_pmf_is_the_convolution_and_keeps_the_moments(lib):
+    games = [(7, 4), (9, 6), (5, 5), (100, 50)]
+    pmf = lib.season_pmf_perm(games)
+    assert pmf.sum() == pytest.approx(1.0, abs=1e-12)
+    k = range(len(pmf))
+    m = sum(i * p for i, p in zip(k, pmf))
+    v = sum(i * i * p for i, p in zip(k, pmf)) - m * m
+    em = sum(lib.expected_kills_perm(n, S)[0] for n, S in games)
+    ev = sum(lib.expected_kills_perm(n, S)[1] for n, S in games)
+    assert m == pytest.approx(em, abs=1e-9)
+    assert v == pytest.approx(ev, abs=1e-9)
+    # two small games by hand: P(K = 1) for (5, 5) is 1 (five stops, one kill)
+    assert list(lib.season_pmf_perm([(5, 5)])) == [0.0, 1.0]
+
+
 def test_plugging_in_p_overstates_expected_kills(lib):
     # The reason the game baseline is a permutation, not p = S / n.
     assert lib.expected_kills(100, 0.5)[0] > lib.expected_kills_perm(100, 50)[0]

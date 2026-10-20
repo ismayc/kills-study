@@ -1,0 +1,2117 @@
+{
+ "bindings": [
+  {
+   "token": "31,197",
+   "sign": "",
+   "before": "his study counts every kill in",
+   "nth": 0,
+   "table": "output/validation.csv",
+   "where": {},
+   "column": "expr",
+   "scale": 1,
+   "abs": false,
+   "expr": {
+    "agg": "sum",
+    "table": "output/validation.csv",
+    "column": "games",
+    "where": {
+     "league": "nba"
+    }
+   }
+  },
+  {
+   "token": "3,880",
+   "sign": "",
+   "before": " # NBA games from ## to ## and",
+   "nth": 0,
+   "table": "output/validation.csv",
+   "where": {},
+   "column": "expr",
+   "scale": 1,
+   "abs": false,
+   "expr": {
+    "agg": "sum",
+    "table": "output/validation.csv",
+    "column": "games",
+    "where": {
+     "league": "wnba"
+    }
+   }
+  },
+  {
+   "token": "6,543,543",
+   "sign": "",
+   "before": "# and # WNBA games from # to #",
+   "nth": 0,
+   "table": "output/validation.csv",
+   "where": {},
+   "column": "expr",
+   "scale": 1,
+   "abs": false,
+   "expr": {
+    "agg": "sum",
+    "table": "output/validation.csv",
+    "column": "possessions"
+   }
+  },
+  {
+   "token": "90%",
+   "sign": "",
+   "before": "rate</div> <div class=\"value\">",
+   "nth": 0,
+   "table": "output/summary.csv",
+   "where": {
+    "league": "nba"
+   },
+   "column": "r2_stop_kill",
+   "scale": 100,
+   "abs": false
+  },
+  {
+   "token": "86%",
+   "sign": "",
+   "before": "stop rate alone accounts for (",
+   "nth": 0,
+   "table": "output/summary.csv",
+   "where": {
+    "league": "wnba"
+   },
+   "column": "r2_stop_kill",
+   "scale": 100,
+   "abs": false
+  },
+  {
+   "token": "0.16%",
+   "sign": "-",
+   "before": "ness</div> <div class=\"value\">",
+   "nth": 0,
+   "table": "output/summary.csv",
+   "where": {},
+   "column": "expr",
+   "scale": 100,
+   "abs": false,
+   "expr": {
+    "op": "/",
+    "args": [
+     {
+      "table": "output/summary.csv",
+      "where": {
+       "league": "nba"
+      },
+      "column": "excess_game"
+     },
+     {
+      "table": "output/summary.csv",
+      "where": {
+       "league": "nba"
+      },
+      "column": "kills"
+     }
+    ]
+   }
+  },
+  {
+   "token": "661",
+   "sign": "",
+   "before": "e's own stops in random order:",
+   "nth": 0,
+   "table": "output/summary.csv",
+   "where": {
+    "league": "nba"
+   },
+   "column": "excess_game",
+   "scale": 1,
+   "abs": true
+  },
+  {
+   "token": "1.85",
+   "sign": "-",
+   "before": "rder: # fewer than expected, z",
+   "nth": 0,
+   "table": "output/summary.csv",
+   "where": {
+    "league": "nba"
+   },
+   "column": "z_game",
+   "scale": 1,
+   "abs": false
+  },
+  {
+   "token": "0.20%",
+   "sign": "+",
+   "before": "fewer than expected, z # (WNBA",
+   "nth": 0,
+   "table": "output/summary.csv",
+   "where": {},
+   "column": "expr",
+   "scale": 100,
+   "abs": false,
+   "expr": {
+    "op": "/",
+    "args": [
+     {
+      "table": "output/summary.csv",
+      "where": {
+       "league": "wnba"
+      },
+      "column": "excess_game"
+     },
+     {
+      "table": "output/summary.csv",
+      "where": {
+       "league": "wnba"
+      },
+      "column": "kills"
+     }
+    ]
+   }
+  },
+  {
+   "token": "0.83",
+   "sign": "+",
+   "before": "than expected, z # (WNBA #%, z",
+   "nth": 0,
+   "table": "output/summary.csv",
+   "where": {
+    "league": "wnba"
+   },
+   "column": "z_game",
+   "scale": 1,
+   "abs": false
+  },
+  {
+   "token": "8.60",
+   "sign": "",
+   "before": "rate</div> <div class=\"value\">",
+   "nth": 0,
+   "table": "output/leaders.csv",
+   "where": {
+    "ranked_by": "kill_rate",
+    "rank": 1,
+    "league": "nba"
+   },
+   "column": "kill_rate",
+   "scale": 1,
+   "abs": false
+  },
+  {
+   "token": "54.6%",
+   "sign": "",
+   "before": " best stop rate in the study (",
+   "nth": 0,
+   "table": "output/team_seasons.csv",
+   "where": {},
+   "column": "expr",
+   "scale": 100,
+   "abs": false,
+   "expr": {
+    "agg": "max",
+    "table": "output/team_seasons.csv",
+    "column": "stop_rate",
+    "where": {
+     "league": "nba"
+    }
+   }
+  },
+  {
+   "token": "22",
+   "sign": "",
+   "before": "reak</div> <div class=\"value\">",
+   "nth": 0,
+   "table": "output/records.csv",
+   "where": {
+    "league": "nba",
+    "rank": 1
+   },
+   "column": "length",
+   "scale": 1,
+   "abs": false
+  },
+  {
+   "token": "99.85%",
+   "sign": "",
+   "before": "ession points capture at least",
+   "nth": 0,
+   "table": "output/validation.csv",
+   "where": {},
+   "column": "expr",
+   "scale": 100,
+   "abs": false,
+   "expr": {
+    "op": "floor",
+    "args": [
+     {
+      "agg": "min",
+      "table": "output/validation.csv",
+      "column": "points_captured"
+     },
+     4
+    ]
+   }
+  },
+  {
+   "token": "0.948",
+   "sign": "",
+   "before": "een stop rate and kill rate is",
+   "nth": 0,
+   "table": "output/summary.csv",
+   "where": {
+    "league": "nba"
+   },
+   "column": "corr_stop_kill",
+   "scale": 1,
+   "abs": false
+  },
+  {
+   "token": "0.929",
+   "sign": "",
+   "before": " kill rate is # in the NBA and",
+   "nth": 0,
+   "table": "output/summary.csv",
+   "where": {
+    "league": "wnba"
+   },
+   "column": "corr_stop_kill",
+   "scale": 1,
+   "abs": false
+  },
+  {
+   "token": "90%",
+   "sign": "",
+   "before": "A, so stop rate alone explains",
+   "nth": 0,
+   "table": "output/summary.csv",
+   "where": {
+    "league": "nba"
+   },
+   "column": "r2_stop_kill",
+   "scale": 100,
+   "abs": false
+  },
+  {
+   "token": "86%",
+   "sign": "",
+   "before": "top rate alone explains #% and",
+   "nth": 0,
+   "table": "output/summary.csv",
+   "where": {
+    "league": "wnba"
+   },
+   "column": "r2_stop_kill",
+   "scale": 100,
+   "abs": false
+  },
+  {
+   "token": "7.93",
+   "sign": "",
+   "before": " The WNBA's higher kill rate (",
+   "nth": 0,
+   "table": "output/league_seasons.csv",
+   "where": {},
+   "column": "expr",
+   "scale": 100,
+   "abs": false,
+   "expr": {
+    "op": "/",
+    "args": [
+     {
+      "agg": "sum",
+      "table": "output/league_seasons.csv",
+      "column": "kills",
+      "where": {
+       "league": "wnba"
+      }
+     },
+     {
+      "agg": "sum",
+      "table": "output/league_seasons.csv",
+      "column": "opp_poss",
+      "where": {
+       "league": "wnba"
+      }
+     }
+    ]
+   }
+  },
+  {
+   "token": "6.87",
+   "sign": "",
+   "before": " opponent possessions, against",
+   "nth": 0,
+   "table": "output/league_seasons.csv",
+   "where": {},
+   "column": "expr",
+   "scale": 100,
+   "abs": false,
+   "expr": {
+    "op": "/",
+    "args": [
+     {
+      "agg": "sum",
+      "table": "output/league_seasons.csv",
+      "column": "kills",
+      "where": {
+       "league": "nba"
+      }
+     },
+     {
+      "agg": "sum",
+      "table": "output/league_seasons.csv",
+      "column": "opp_poss",
+      "where": {
+       "league": "nba"
+      }
+     }
+    ]
+   }
+  },
+  {
+   "token": "52.5%",
+   "sign": "",
+   "before": "omes with a higher stop rate (",
+   "nth": 0,
+   "table": "output/team_seasons.csv",
+   "where": {},
+   "column": "expr",
+   "scale": 100,
+   "abs": false,
+   "expr": {
+    "op": "/",
+    "args": [
+     {
+      "agg": "sum",
+      "table": "output/team_seasons.csv",
+      "column": "stops",
+      "where": {
+       "league": "wnba"
+      }
+     },
+     {
+      "agg": "sum",
+      "table": "output/team_seasons.csv",
+      "column": "opp_poss",
+      "where": {
+       "league": "wnba"
+      }
+     }
+    ]
+   }
+  },
+  {
+   "token": "49.6%",
+   "sign": "",
+   "before": "a higher stop rate (#% against",
+   "nth": 0,
+   "table": "output/team_seasons.csv",
+   "where": {},
+   "column": "expr",
+   "scale": 100,
+   "abs": false,
+   "expr": {
+    "op": "/",
+    "args": [
+     {
+      "agg": "sum",
+      "table": "output/team_seasons.csv",
+      "column": "stops",
+      "where": {
+       "league": "nba"
+      }
+     },
+     {
+      "agg": "sum",
+      "table": "output/team_seasons.csv",
+      "column": "opp_poss",
+      "where": {
+       "league": "nba"
+      }
+     }
+    ]
+   }
+  },
+  {
+   "token": "776",
+   "sign": "",
+   "before": "-|---|---|---|---|---| | NBA |",
+   "nth": 0,
+   "table": "output/summary.csv",
+   "where": {
+    "league": "nba"
+   },
+   "column": "team_seasons",
+   "scale": 1,
+   "abs": false
+  },
+  {
+   "token": "407,654",
+   "sign": "",
+   "before": "-|---|---|---|---| | NBA | # |",
+   "nth": 0,
+   "table": "output/summary.csv",
+   "where": {
+    "league": "nba"
+   },
+   "column": "kills",
+   "scale": 1,
+   "abs": false
+  },
+  {
+   "token": "661",
+   "sign": "-",
+   "before": "-|---|---|---| | NBA | # | # |",
+   "nth": 0,
+   "table": "output/summary.csv",
+   "where": {
+    "league": "nba"
+   },
+   "column": "excess_game",
+   "scale": 1,
+   "abs": false
+  },
+  {
+   "token": "0.16%",
+   "sign": "-",
+   "before": "-|---|---| | NBA | # | # | # (",
+   "nth": 0,
+   "table": "output/summary.csv",
+   "where": {},
+   "column": "expr",
+   "scale": 100,
+   "abs": false,
+   "expr": {
+    "op": "/",
+    "args": [
+     {
+      "table": "output/summary.csv",
+      "where": {
+       "league": "nba"
+      },
+      "column": "excess_game"
+     },
+     {
+      "table": "output/summary.csv",
+      "where": {
+       "league": "nba"
+      },
+      "column": "kills"
+     }
+    ]
+   }
+  },
+  {
+   "token": "1.85",
+   "sign": "-",
+   "before": "|---| | NBA | # | # | # (#%) |",
+   "nth": 0,
+   "table": "output/summary.csv",
+   "where": {
+    "league": "nba"
+   },
+   "column": "z_game",
+   "scale": 1,
+   "abs": false
+  },
+  {
+   "token": "5.5%",
+   "sign": "",
+   "before": "| | NBA | # | # | # (#%) | # |",
+   "nth": 0,
+   "table": "output/summary.csv",
+   "where": {
+    "league": "nba"
+   },
+   "column": "share_abs_z_over_1_96",
+   "scale": 100,
+   "abs": false
+  },
+  {
+   "token": "221",
+   "sign": "",
+   "before": "# | # (#%) | # | #% | | WNBA |",
+   "nth": 0,
+   "table": "output/summary.csv",
+   "where": {
+    "league": "wnba"
+   },
+   "column": "team_seasons",
+   "scale": 1,
+   "abs": false
+  },
+  {
+   "token": "48,310",
+   "sign": "",
+   "before": "# (#%) | # | #% | | WNBA | # |",
+   "nth": 0,
+   "table": "output/summary.csv",
+   "where": {
+    "league": "wnba"
+   },
+   "column": "kills",
+   "scale": 1,
+   "abs": false
+  },
+  {
+   "token": "96",
+   "sign": "+",
+   "before": "%) | # | #% | | WNBA | # | # |",
+   "nth": 0,
+   "table": "output/summary.csv",
+   "where": {
+    "league": "wnba"
+   },
+   "column": "excess_game",
+   "scale": 1,
+   "abs": false
+  },
+  {
+   "token": "0.20%",
+   "sign": "+",
+   "before": " # | #% | | WNBA | # | # | # (",
+   "nth": 0,
+   "table": "output/summary.csv",
+   "where": {},
+   "column": "expr",
+   "scale": 100,
+   "abs": false,
+   "expr": {
+    "op": "/",
+    "args": [
+     {
+      "table": "output/summary.csv",
+      "where": {
+       "league": "wnba"
+      },
+      "column": "excess_game"
+     },
+     {
+      "table": "output/summary.csv",
+      "where": {
+       "league": "wnba"
+      },
+      "column": "kills"
+     }
+    ]
+   }
+  },
+  {
+   "token": "0.83",
+   "sign": "+",
+   "before": "#% | | WNBA | # | # | # (#%) |",
+   "nth": 0,
+   "table": "output/summary.csv",
+   "where": {
+    "league": "wnba"
+   },
+   "column": "z_game",
+   "scale": 1,
+   "abs": false
+  },
+  {
+   "token": "4.5%",
+   "sign": "",
+   "before": " | WNBA | # | # | # (#%) | # |",
+   "nth": 0,
+   "table": "output/summary.csv",
+   "where": {
+    "league": "wnba"
+   },
+   "column": "share_abs_z_over_1_96",
+   "scale": 100,
+   "abs": false
+  },
+  {
+   "token": "5.5%",
+   "sign": "",
+   "before": "ld pass # by chance alone, and",
+   "nth": 0,
+   "table": "output/summary.csv",
+   "where": {
+    "league": "nba"
+   },
+   "column": "share_abs_z_over_1_96",
+   "scale": 100,
+   "abs": false
+  },
+  {
+   "token": "4.5%",
+   "sign": "",
+   "before": " # by chance alone, and #% and",
+   "nth": 0,
+   "table": "output/summary.csv",
+   "where": {
+    "league": "wnba"
+   },
+   "column": "share_abs_z_over_1_96",
+   "scale": 100,
+   "abs": false
+  },
+  {
+   "token": "21",
+   "sign": "",
+   "before": "enly by direction: in the NBA,",
+   "nth": 0,
+   "table": "output/team_seasons.csv",
+   "where": {},
+   "column": "expr",
+   "scale": 1,
+   "abs": false,
+   "expr": {
+    "op": "/",
+    "args": [
+     {
+      "agg": "sum",
+      "table": "output/team_seasons.csv",
+      "column": "z_game",
+      "where": {
+       "league": "nba"
+      },
+      "range": {
+       "z_game": [
+        1.96,
+        1000000000.0
+       ]
+      }
+     },
+     {
+      "agg": "mean",
+      "table": "output/team_seasons.csv",
+      "column": "z_game",
+      "where": {
+       "league": "nba"
+      },
+      "range": {
+       "z_game": [
+        1.96,
+        1000000000.0
+       ]
+      }
+     }
+    ]
+   }
+  },
+  {
+   "token": "22",
+   "sign": "",
+   "before": "# team-seasons sit above # and",
+   "nth": 0,
+   "table": "output/team_seasons.csv",
+   "where": {},
+   "column": "expr",
+   "scale": 1,
+   "abs": false,
+   "expr": {
+    "op": "/",
+    "args": [
+     {
+      "agg": "sum",
+      "table": "output/team_seasons.csv",
+      "column": "z_game",
+      "where": {
+       "league": "nba"
+      },
+      "range": {
+       "z_game": [
+        -1000000000.0,
+        -1.96
+       ]
+      }
+     },
+     {
+      "agg": "mean",
+      "table": "output/team_seasons.csv",
+      "column": "z_game",
+      "where": {
+       "league": "nba"
+      },
+      "range": {
+       "z_game": [
+        -1000000000.0,
+        -1.96
+       ]
+      }
+     }
+    ]
+   }
+  },
+  {
+   "token": "5",
+   "sign": "",
+   "before": " # and # below #; in the WNBA,",
+   "nth": 0,
+   "table": "output/team_seasons.csv",
+   "where": {},
+   "column": "expr",
+   "scale": 1,
+   "abs": false,
+   "expr": {
+    "op": "/",
+    "args": [
+     {
+      "agg": "sum",
+      "table": "output/team_seasons.csv",
+      "column": "z_game",
+      "where": {
+       "league": "wnba"
+      },
+      "range": {
+       "z_game": [
+        1.96,
+        1000000000.0
+       ]
+      }
+     },
+     {
+      "agg": "mean",
+      "table": "output/team_seasons.csv",
+      "column": "z_game",
+      "where": {
+       "league": "wnba"
+      },
+      "range": {
+       "z_game": [
+        1.96,
+        1000000000.0
+       ]
+      }
+     }
+    ]
+   }
+  },
+  {
+   "token": "5",
+   "sign": "",
+   "before": " # below #; in the WNBA, # and",
+   "nth": 0,
+   "table": "output/team_seasons.csv",
+   "where": {},
+   "column": "expr",
+   "scale": 1,
+   "abs": false,
+   "expr": {
+    "op": "/",
+    "args": [
+     {
+      "agg": "sum",
+      "table": "output/team_seasons.csv",
+      "column": "z_game",
+      "where": {
+       "league": "wnba"
+      },
+      "range": {
+       "z_game": [
+        -1000000000.0,
+        -1.96
+       ]
+      }
+     },
+     {
+      "agg": "mean",
+      "table": "output/team_seasons.csv",
+      "column": "z_game",
+      "where": {
+       "league": "wnba"
+      },
+      "range": {
+       "z_game": [
+        -1000000000.0,
+        -1.96
+       ]
+      }
+     }
+    ]
+   }
+  },
+  {
+   "token": "18",
+   "sign": "",
+   "before": "A's is slightly below it, with",
+   "nth": 0,
+   "table": "output/league_seasons.csv",
+   "where": {},
+   "column": "expr",
+   "scale": 1,
+   "abs": false,
+   "expr": {
+    "op": "/",
+    "args": [
+     {
+      "agg": "sum",
+      "table": "output/league_seasons.csv",
+      "column": "opp_poss",
+      "where": {
+       "league": "nba"
+      },
+      "range": {
+       "z_game": [
+        -1000000000.0,
+        -1e-12
+       ]
+      }
+     },
+     {
+      "agg": "mean",
+      "table": "output/league_seasons.csv",
+      "column": "opp_poss",
+      "where": {
+       "league": "nba"
+      },
+      "range": {
+       "z_game": [
+        -1000000000.0,
+        -1e-12
+       ]
+      }
+     }
+    ]
+   }
+  },
+  {
+   "token": "26",
+   "sign": "",
+   "before": "s slightly below it, with # of",
+   "nth": 0,
+   "table": "output/league_seasons.csv",
+   "where": {},
+   "column": "expr",
+   "scale": 1,
+   "abs": false,
+   "expr": {
+    "op": "/",
+    "args": [
+     {
+      "agg": "sum",
+      "table": "output/league_seasons.csv",
+      "column": "opp_poss",
+      "where": {
+       "league": "nba"
+      },
+      "range": {
+       "z_game": [
+        -1000000000.0,
+        1000000000.0
+       ]
+      }
+     },
+     {
+      "agg": "mean",
+      "table": "output/league_seasons.csv",
+      "column": "opp_poss",
+      "where": {
+       "league": "nba"
+      },
+      "range": {
+       "z_game": [
+        -1000000000.0,
+        1000000000.0
+       ]
+      }
+     }
+    ]
+   }
+  },
+  {
+   "token": "2.46",
+   "sign": "-",
+   "before": "inus #; two NBA seasons, ## (z",
+   "nth": 0,
+   "table": "output/league_seasons.csv",
+   "where": {
+    "league": "nba",
+    "season": "2018-19"
+   },
+   "column": "z_game",
+   "scale": 1,
+   "abs": false
+  },
+  {
+   "token": "1.99",
+   "sign": "-",
+   "before": "BA seasons, ## (z #) and ## (z",
+   "nth": 0,
+   "table": "output/league_seasons.csv",
+   "where": {
+    "league": "nba",
+    "season": "2023-24"
+   },
+   "column": "z_game",
+   "scale": 1,
+   "abs": false
+  },
+  {
+   "token": "8.60",
+   "sign": "",
+   "before": "A kill rate is ## Milwaukee at",
+   "nth": 0,
+   "table": "output/leaders.csv",
+   "where": {
+    "ranked_by": "kill_rate",
+    "rank": 1,
+    "league": "nba"
+   },
+   "column": "kill_rate",
+   "scale": 1,
+   "abs": false
+  },
+  {
+   "token": "54.6%",
+   "sign": "",
+   "before": " of any NBA team-season here (",
+   "nth": 0,
+   "table": "output/team_seasons.csv",
+   "where": {},
+   "column": "expr",
+   "scale": 100,
+   "abs": false,
+   "expr": {
+    "agg": "max",
+    "table": "output/team_seasons.csv",
+    "column": "stop_rate",
+    "where": {
+     "league": "nba"
+    }
+   }
+  },
+  {
+   "token": "0.73",
+   "sign": "-",
+   "before": ", and its own streakiness z is",
+   "nth": 0,
+   "table": "output/leaders.csv",
+   "where": {
+    "ranked_by": "kill_rate",
+    "rank": 1,
+    "league": "nba"
+   },
+   "column": "z_game",
+   "scale": 1,
+   "abs": false
+  },
+  {
+   "token": "9.88",
+   "sign": "",
+   "before": "e WNBA, # Connecticut leads at",
+   "nth": 0,
+   "table": "output/leaders.csv",
+   "where": {
+    "ranked_by": "kill_rate",
+    "rank": 1,
+    "league": "wnba"
+   },
+   "column": "kill_rate",
+   "scale": 1,
+   "abs": false
+  },
+  {
+   "token": "57.2%",
+   "sign": "",
+   "before": " the league's best stop rate (",
+   "nth": 0,
+   "table": "output/team_seasons.csv",
+   "where": {},
+   "column": "expr",
+   "scale": 100,
+   "abs": false,
+   "expr": {
+    "agg": "max",
+    "table": "output/team_seasons.csv",
+    "column": "stop_rate",
+    "where": {
+     "league": "wnba"
+    }
+   }
+  },
+  {
+   "token": "0.73",
+   "sign": "+",
+   "before": "te (#%) and a streakiness z of",
+   "nth": 0,
+   "table": "output/leaders.csv",
+   "where": {
+    "ranked_by": "kill_rate",
+    "rank": 1,
+    "league": "wnba"
+   },
+   "column": "z_game",
+   "scale": 1,
+   "abs": false
+  },
+  {
+   "token": "776",
+   "sign": "",
+   "before": "son's stop-rate rank among all",
+   "nth": 0,
+   "table": "output/summary.csv",
+   "where": {
+    "league": "nba"
+   },
+   "column": "team_seasons",
+   "scale": 1,
+   "abs": false
+  },
+  {
+   "token": "8.43",
+   "sign": "",
+   "before": "treakiness: ## San Antonio, at",
+   "nth": 0,
+   "table": "output/leaders.csv",
+   "where": {
+    "ranked_by": "kill_rate",
+    "rank": 2,
+    "league": "nba"
+   },
+   "column": "kill_rate",
+   "scale": 1,
+   "abs": false
+  },
+  {
+   "token": "2.66",
+   "sign": "+",
+   "before": "o, at # kills per # and a z of",
+   "nth": 0,
+   "table": "output/leaders.csv",
+   "where": {
+    "ranked_by": "kill_rate",
+    "rank": 2,
+    "league": "nba"
+   },
+   "column": "z_game",
+   "scale": 1,
+   "abs": false
+  },
+  {
+   "token": "3.03",
+   "sign": "+",
+   "before": "s # Los Angeles in the WNBA at",
+   "nth": 0,
+   "table": "output/team_seasons.csv",
+   "where": {},
+   "column": "expr",
+   "scale": 1,
+   "abs": false,
+   "expr": {
+    "agg": "max",
+    "table": "output/team_seasons.csv",
+    "column": "z_game",
+    "where": {
+     "league": "wnba"
+    }
+   }
+  },
+  {
+   "token": "3.79",
+   "sign": "-",
+   "before": "est is ## Dallas in the NBA at",
+   "nth": 0,
+   "table": "output/team_seasons.csv",
+   "where": {},
+   "column": "expr",
+   "scale": 1,
+   "abs": false,
+   "expr": {
+    "agg": "min",
+    "table": "output/team_seasons.csv",
+    "column": "z_game",
+    "where": {
+     "league": "nba"
+    }
+   }
+  },
+  {
+   "token": "22",
+   "sign": "",
+   "before": "ns/Oklahoma City scoreless for",
+   "nth": 0,
+   "table": "output/records.csv",
+   "where": {
+    "league": "nba",
+    "rank": 1
+   },
+   "column": "length",
+   "scale": 1,
+   "abs": false
+  },
+  {
+   "token": "7",
+   "sign": "",
+   "before": "r # straight possessions, from",
+   "nth": 0,
+   "table": "output/records.csv",
+   "where": {},
+   "column": "expr",
+   "scale": 1,
+   "abs": false,
+   "expr": {
+    "op": "round",
+    "args": [
+     {
+      "op": "-",
+      "args": [
+       {
+        "op": "/",
+        "args": [
+         {
+          "table": "output/records.csv",
+          "where": {
+           "league": "nba",
+           "rank": 1
+          },
+          "column": "start_clock"
+         },
+         60
+        ]
+       },
+       0.5
+      ]
+     },
+     0
+    ]
+   }
+  },
+  {
+   "token": "45",
+   "sign": "",
+   "before": " straight possessions, from #:",
+   "nth": 0,
+   "table": "output/records.csv",
+   "where": {},
+   "column": "expr",
+   "scale": 1,
+   "abs": false,
+   "expr": {
+    "op": "-",
+    "args": [
+     {
+      "table": "output/records.csv",
+      "where": {
+       "league": "nba",
+       "rank": 1
+      },
+      "column": "start_clock"
+     },
+     {
+      "op": "*",
+      "args": [
+       {
+        "op": "round",
+        "args": [
+         {
+          "op": "-",
+          "args": [
+           {
+            "op": "/",
+            "args": [
+             {
+              "table": "output/records.csv",
+              "where": {
+               "league": "nba",
+               "rank": 1
+              },
+              "column": "start_clock"
+             },
+             60
+            ]
+           },
+           0.5
+          ]
+         },
+         0
+        ]
+       },
+       60
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "token": "7",
+   "sign": "",
+   "before": "om #:# of the third quarter to",
+   "nth": 0,
+   "table": "output/records.csv",
+   "where": {},
+   "column": "expr",
+   "scale": 1,
+   "abs": false,
+   "expr": {
+    "op": "round",
+    "args": [
+     {
+      "op": "-",
+      "args": [
+       {
+        "op": "/",
+        "args": [
+         {
+          "table": "output/records.csv",
+          "where": {
+           "league": "nba",
+           "rank": 1
+          },
+          "column": "end_clock"
+         },
+         60
+        ]
+       },
+       0.5
+      ]
+     },
+     0
+    ]
+   }
+  },
+  {
+   "token": "50",
+   "sign": "",
+   "before": "#:# of the third quarter to #:",
+   "nth": 0,
+   "table": "output/records.csv",
+   "where": {},
+   "column": "expr",
+   "scale": 1,
+   "abs": false,
+   "expr": {
+    "op": "-",
+    "args": [
+     {
+      "table": "output/records.csv",
+      "where": {
+       "league": "nba",
+       "rank": 1
+      },
+      "column": "end_clock"
+     },
+     {
+      "op": "*",
+      "args": [
+       {
+        "op": "round",
+        "args": [
+         {
+          "op": "-",
+          "args": [
+           {
+            "op": "/",
+            "args": [
+             {
+              "table": "output/records.csv",
+              "where": {
+               "league": "nba",
+               "rank": 1
+              },
+              "column": "end_clock"
+             },
+             60
+            ]
+           },
+           0.5
+          ]
+         },
+         0
+        ]
+       },
+       60
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "token": "7",
+   "sign": "",
+   "before": "# of the fourth, starting from",
+   "nth": 0,
+   "table": "output/records.csv",
+   "where": {
+    "league": "nba",
+    "rank": 1
+   },
+   "column": "margin_start",
+   "scale": 1,
+   "abs": true
+  },
+  {
+   "token": "4",
+   "sign": "",
+   "before": "Milwaukee on December # # from",
+   "nth": 0,
+   "table": "output/records.csv",
+   "where": {},
+   "column": "expr",
+   "scale": 1,
+   "abs": false,
+   "expr": {
+    "op": "round",
+    "args": [
+     {
+      "op": "-",
+      "args": [
+       {
+        "op": "/",
+        "args": [
+         {
+          "table": "output/records.csv",
+          "where": {
+           "league": "nba",
+           "rank": 2
+          },
+          "column": "start_clock"
+         },
+         60
+        ]
+       },
+       0.5
+      ]
+     },
+     0
+    ]
+   }
+  },
+  {
+   "token": "13",
+   "sign": "",
+   "before": "waukee on December # # from #:",
+   "nth": 0,
+   "table": "output/records.csv",
+   "where": {},
+   "column": "expr",
+   "scale": 1,
+   "abs": false,
+   "expr": {
+    "op": "-",
+    "args": [
+     {
+      "table": "output/records.csv",
+      "where": {
+       "league": "nba",
+       "rank": 2
+      },
+      "column": "start_clock"
+     },
+     {
+      "op": "*",
+      "args": [
+       {
+        "op": "round",
+        "args": [
+         {
+          "op": "-",
+          "args": [
+           {
+            "op": "/",
+            "args": [
+             {
+              "table": "output/records.csv",
+              "where": {
+               "league": "nba",
+               "rank": 2
+              },
+              "column": "start_clock"
+             },
+             60
+            ]
+           },
+           0.5
+          ]
+         },
+         0
+        ]
+       },
+       60
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "token": "5",
+   "sign": "",
+   "before": "om #:# of the first quarter to",
+   "nth": 0,
+   "table": "output/records.csv",
+   "where": {},
+   "column": "expr",
+   "scale": 1,
+   "abs": false,
+   "expr": {
+    "op": "round",
+    "args": [
+     {
+      "op": "-",
+      "args": [
+       {
+        "op": "/",
+        "args": [
+         {
+          "table": "output/records.csv",
+          "where": {
+           "league": "nba",
+           "rank": 2
+          },
+          "column": "end_clock"
+         },
+         60
+        ]
+       },
+       0.5
+      ]
+     },
+     0
+    ]
+   }
+  },
+  {
+   "token": "42",
+   "sign": "",
+   "before": "#:# of the first quarter to #:",
+   "nth": 0,
+   "table": "output/records.csv",
+   "where": {},
+   "column": "expr",
+   "scale": 1,
+   "abs": false,
+   "expr": {
+    "op": "-",
+    "args": [
+     {
+      "table": "output/records.csv",
+      "where": {
+       "league": "nba",
+       "rank": 2
+      },
+      "column": "end_clock"
+     },
+     {
+      "op": "*",
+      "args": [
+       {
+        "op": "round",
+        "args": [
+         {
+          "op": "-",
+          "args": [
+           {
+            "op": "/",
+            "args": [
+             {
+              "table": "output/records.csv",
+              "where": {
+               "league": "nba",
+               "rank": 2
+              },
+              "column": "end_clock"
+             },
+             60
+            ]
+           },
+           0.5
+          ]
+         },
+         0
+        ]
+       },
+       60
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "token": "7",
+   "sign": "",
+   "before": "o #:# of the second, also from",
+   "nth": 0,
+   "table": "output/records.csv",
+   "where": {
+    "league": "nba",
+    "rank": 2
+   },
+   "column": "margin_start",
+   "scale": 1,
+   "abs": true
+  },
+  {
+   "token": "21",
+   "sign": "",
+   "before": "rom # down. The WNBA record is",
+   "nth": 0,
+   "table": "output/records.csv",
+   "where": {
+    "league": "wnba",
+    "rank": 1
+   },
+   "column": "length",
+   "scale": 1,
+   "abs": false
+  },
+  {
+   "token": "22",
+   "sign": "",
+   "before": "a City. The shaded span is the",
+   "nth": 0,
+   "table": "output/records.csv",
+   "where": {
+    "league": "nba",
+    "rank": 1
+   },
+   "column": "length",
+   "scale": 1,
+   "abs": false
+  },
+  {
+   "token": "7",
+   "sign": "",
+   "before": "ess opponent possessions, from",
+   "nth": 0,
+   "table": "output/records.csv",
+   "where": {},
+   "column": "expr",
+   "scale": 1,
+   "abs": false,
+   "expr": {
+    "op": "round",
+    "args": [
+     {
+      "op": "-",
+      "args": [
+       {
+        "op": "/",
+        "args": [
+         {
+          "table": "output/records.csv",
+          "where": {
+           "league": "nba",
+           "rank": 1
+          },
+          "column": "start_clock"
+         },
+         60
+        ]
+       },
+       0.5
+      ]
+     },
+     0
+    ]
+   }
+  },
+  {
+   "token": "45",
+   "sign": "",
+   "before": " opponent possessions, from #:",
+   "nth": 0,
+   "table": "output/records.csv",
+   "where": {},
+   "column": "expr",
+   "scale": 1,
+   "abs": false,
+   "expr": {
+    "op": "-",
+    "args": [
+     {
+      "table": "output/records.csv",
+      "where": {
+       "league": "nba",
+       "rank": 1
+      },
+      "column": "start_clock"
+     },
+     {
+      "op": "*",
+      "args": [
+       {
+        "op": "round",
+        "args": [
+         {
+          "op": "-",
+          "args": [
+           {
+            "op": "/",
+            "args": [
+             {
+              "table": "output/records.csv",
+              "where": {
+               "league": "nba",
+               "rank": 1
+              },
+              "column": "start_clock"
+             },
+             60
+            ]
+           },
+           0.5
+          ]
+         },
+         0
+        ]
+       },
+       60
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "token": "7",
+   "sign": "",
+   "before": "om #:# of the third quarter to",
+   "nth": 1,
+   "table": "output/records.csv",
+   "where": {},
+   "column": "expr",
+   "scale": 1,
+   "abs": false,
+   "expr": {
+    "op": "round",
+    "args": [
+     {
+      "op": "-",
+      "args": [
+       {
+        "op": "/",
+        "args": [
+         {
+          "table": "output/records.csv",
+          "where": {
+           "league": "nba",
+           "rank": 1
+          },
+          "column": "end_clock"
+         },
+         60
+        ]
+       },
+       0.5
+      ]
+     },
+     0
+    ]
+   }
+  },
+  {
+   "token": "50",
+   "sign": "",
+   "before": "#:# of the third quarter to #:",
+   "nth": 1,
+   "table": "output/records.csv",
+   "where": {},
+   "column": "expr",
+   "scale": 1,
+   "abs": false,
+   "expr": {
+    "op": "-",
+    "args": [
+     {
+      "table": "output/records.csv",
+      "where": {
+       "league": "nba",
+       "rank": 1
+      },
+      "column": "end_clock"
+     },
+     {
+      "op": "*",
+      "args": [
+       {
+        "op": "round",
+        "args": [
+         {
+          "op": "-",
+          "args": [
+           {
+            "op": "/",
+            "args": [
+             {
+              "table": "output/records.csv",
+              "where": {
+               "league": "nba",
+               "rank": 1
+              },
+              "column": "end_clock"
+             },
+             60
+            ]
+           },
+           0.5
+          ]
+         },
+         0
+        ]
+       },
+       60
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "token": "7",
+   "sign": "",
+   "before": "fourth; the Clippers went from",
+   "nth": 0,
+   "table": "output/records.csv",
+   "where": {
+    "league": "nba",
+    "rank": 1
+   },
+   "column": "margin_start",
+   "scale": 1,
+   "abs": true
+  },
+  {
+   "token": "15",
+   "sign": "",
+   "before": "ers went from # points down to",
+   "nth": 0,
+   "table": "output/record_game.csv",
+   "where": {},
+   "column": "expr",
+   "scale": 1,
+   "abs": false,
+   "expr": {
+    "op": "-",
+    "args": [
+     {
+      "agg": "sum",
+      "table": "output/record_game.csv",
+      "column": "pts",
+      "where": {
+       "offense": "LAC"
+      },
+      "range": {
+       "ord": [
+        0,
+        147
+       ]
+      }
+     },
+     {
+      "agg": "sum",
+      "table": "output/record_game.csv",
+      "column": "pts",
+      "where": {
+       "offense": "NOK"
+      },
+      "range": {
+       "ord": [
+        0,
+        147
+       ]
+      }
+     }
+    ]
+   }
+  },
+  {
+   "token": "22",
+   "sign": "",
+   "before": "n to # up inside it and won by",
+   "nth": 0,
+   "table": "output/record_game.csv",
+   "where": {},
+   "column": "expr",
+   "scale": 1,
+   "abs": false,
+   "expr": {
+    "op": "-",
+    "args": [
+     {
+      "agg": "sum",
+      "table": "output/record_game.csv",
+      "column": "pts",
+      "where": {
+       "offense": "LAC"
+      }
+     },
+     {
+      "agg": "sum",
+      "table": "output/record_game.csv",
+      "column": "pts",
+      "where": {
+       "offense": "NOK"
+      }
+     }
+    ]
+   }
+  },
+  {
+   "token": "0.35",
+   "sign": "",
+   "before": "he wrong team, which would add",
+   "nth": 0,
+   "table": "output/source_check.csv",
+   "where": {},
+   "column": "expr",
+   "scale": 1,
+   "abs": false,
+   "expr": {
+    "agg": "min",
+    "table": "output/source_check.csv",
+    "column": "rate_mean_diff",
+    "where": {
+     "corrected": "false"
+    }
+   }
+  },
+  {
+   "token": "0.43",
+   "sign": "",
+   "before": "ong team, which would add # to",
+   "nth": 0,
+   "table": "output/source_check.csv",
+   "where": {},
+   "column": "expr",
+   "scale": 1,
+   "abs": false,
+   "expr": {
+    "agg": "max",
+    "table": "output/source_check.csv",
+    "column": "rate_mean_diff",
+    "where": {
+     "corrected": "false"
+    }
+   }
+  },
+  {
+   "token": "0.995",
+   "sign": "",
+   "before": "with a correlation of at least",
+   "nth": 0,
+   "table": "output/source_check.csv",
+   "where": {},
+   "column": "expr",
+   "scale": 1,
+   "abs": false,
+   "expr": {
+    "op": "floor",
+    "args": [
+     {
+      "agg": "min",
+      "table": "output/source_check.csv",
+      "column": "rate_corr",
+      "where": {
+       "corrected": "true"
+      }
+     },
+     3
+    ]
+   }
+  },
+  {
+   "token": "0.018",
+   "sign": "-",
+   "before": "# and mean team differences of",
+   "nth": 0,
+   "table": "output/source_check.csv",
+   "where": {},
+   "column": "expr",
+   "scale": 1,
+   "abs": false,
+   "expr": {
+    "agg": "min",
+    "table": "output/source_check.csv",
+    "column": "rate_mean_diff",
+    "where": {
+     "corrected": "true"
+    }
+   }
+  },
+  {
+   "token": "0.029",
+   "sign": "+",
+   "before": " mean team differences of # to",
+   "nth": 0,
+   "table": "output/source_check.csv",
+   "where": {},
+   "column": "expr",
+   "scale": 1,
+   "abs": false,
+   "expr": {
+    "agg": "max",
+    "table": "output/source_check.csv",
+    "column": "rate_mean_diff",
+    "where": {
+     "corrected": "true"
+    }
+   }
+  },
+  {
+   "token": "0.47",
+   "sign": "",
+   "before": "le, the spread across teams is",
+   "nth": 0,
+   "table": "output/source_check.csv",
+   "where": {},
+   "column": "expr",
+   "scale": 1,
+   "abs": false,
+   "expr": {
+    "agg": "min",
+    "table": "output/source_check.csv",
+    "column": "rate_sd",
+    "where": {
+     "corrected": "true"
+    }
+   }
+  },
+  {
+   "token": "0.97",
+   "sign": "",
+   "before": "he spread across teams is # to",
+   "nth": 0,
+   "table": "output/source_check.csv",
+   "where": {},
+   "column": "expr",
+   "scale": 1,
+   "abs": false,
+   "expr": {
+    "agg": "max",
+    "table": "output/source_check.csv",
+    "column": "rate_sd",
+    "where": {
+     "corrected": "true"
+    }
+   }
+  },
+  {
+   "token": "6.75",
+   "sign": "",
+   "before": " the NBA's kill rate went from",
+   "nth": 0,
+   "table": "output/league_seasons.csv",
+   "where": {
+    "league": "nba",
+    "season": "2024-25"
+   },
+   "column": "kill_rate",
+   "scale": 1,
+   "abs": false
+  },
+  {
+   "token": "6.51",
+   "sign": "",
+   "before": "kill rate went from # in ## to",
+   "nth": 0,
+   "table": "output/league_seasons.csv",
+   "where": {
+    "league": "nba",
+    "season": "2025-26"
+   },
+   "column": "kill_rate",
+   "scale": 1,
+   "abs": false
+  },
+  {
+   "token": "8.01",
+   "sign": "",
+   "before": "to # in ## and the WNBA's from",
+   "nth": 0,
+   "table": "output/league_seasons.csv",
+   "where": {
+    "league": "wnba",
+    "season": "2025"
+   },
+   "column": "kill_rate",
+   "scale": 1,
+   "abs": false
+  },
+  {
+   "token": "7.33",
+   "sign": "",
+   "before": " and the WNBA's from # in # to",
+   "nth": 0,
+   "table": "output/league_seasons.csv",
+   "where": {
+    "league": "wnba",
+    "season": "2026"
+   },
+   "column": "kill_rate",
+   "scale": 1,
+   "abs": false
+  },
+  {
+   "token": "114.8",
+   "sign": "",
+   "before": "opponent possessions rose from",
+   "nth": 0,
+   "table": "output/team_seasons.csv",
+   "where": {},
+   "column": "expr",
+   "scale": 1,
+   "abs": false,
+   "expr": {
+    "agg": "wmean",
+    "table": "output/team_seasons.csv",
+    "column": "pts_allowed_per100",
+    "where": {
+     "league": "nba",
+     "season": "2024-25"
+    },
+    "weight": "opp_poss"
+   }
+  },
+  {
+   "token": "116.2",
+   "sign": "",
+   "before": "ent possessions rose from # to",
+   "nth": 0,
+   "table": "output/team_seasons.csv",
+   "where": {},
+   "column": "expr",
+   "scale": 1,
+   "abs": false,
+   "expr": {
+    "agg": "wmean",
+    "table": "output/team_seasons.csv",
+    "column": "pts_allowed_per100",
+    "where": {
+     "league": "nba",
+     "season": "2025-26"
+    },
+    "weight": "opp_poss"
+   }
+  },
+  {
+   "token": "104.5",
+   "sign": "",
+   "before": "ions rose from # to # and from",
+   "nth": 0,
+   "table": "output/team_seasons.csv",
+   "where": {},
+   "column": "expr",
+   "scale": 1,
+   "abs": false,
+   "expr": {
+    "agg": "wmean",
+    "table": "output/team_seasons.csv",
+    "column": "pts_allowed_per100",
+    "where": {
+     "league": "wnba",
+     "season": "2025"
+    },
+    "weight": "opp_poss"
+   }
+  },
+  {
+   "token": "108.9",
+   "sign": "",
+   "before": "rose from # to # and from # to",
+   "nth": 0,
+   "table": "output/team_seasons.csv",
+   "where": {},
+   "column": "expr",
+   "scale": 1,
+   "abs": false,
+   "expr": {
+    "agg": "wmean",
+    "table": "output/team_seasons.csv",
+    "column": "pts_allowed_per100",
+    "where": {
+     "league": "wnba",
+     "season": "2026"
+    },
+    "weight": "opp_poss"
+   }
+  }
+ ]
+}

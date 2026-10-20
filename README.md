@@ -24,7 +24,7 @@ licenses: `DATA_SOURCES.md`. Private repo; not yet on the family hub.
 ## Results
 
 <!-- gen:results -->
-Coverage: 31,197 NBA games (2000-01 to 2025-26) and 3,880 WNBA games (2009 to 2026), 6,543,543 possessions, every game whose score passes the shared layer's checks (12 such games are missing from the possession sources). Possession points capture at least 99.86% of every season's points; the rest are free throws that belong to no possession (technicals, a period's first second). Every table is computed in Python and again in R, and the two agree on every cell.
+Coverage: 31,197 NBA games (2000-01 to 2025-26) and 3,880 WNBA games (2009 to 2026), 6,543,543 possessions, every game whose score passes the shared layer's checks (12 such games are missing from the possession sources). Possession points capture at least 99.85% of every season's points (rounded down, since it is a floor); the rest are free throws that belong to no possession (technicals, a period's first second). Every table is computed in Python and again in R, and the two agree on every cell.
 
 **Two possession sources.** NBA 2025-26 and WNBA 2026 are not in the pbpstats archive and come from playbyplay-study's live-feed builds, corrected two ways (empty end-of-period stubs dropped; each period-start possession given to the team that first shoots or turns it over). On the four seasons both sources cover, the corrected builds reproduce the archive's team kill rates:
 
