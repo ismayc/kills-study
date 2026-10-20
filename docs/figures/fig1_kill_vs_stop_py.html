@@ -1,0 +1,1345 @@
+<html>
+<head><style>html,body{margin:0;height:100%}
+.js-plotly-plot,.plotly-graph-div{height:auto!important}
+@media (prefers-color-scheme: dark){
+  body:not(.fam-light){background:#1a1a19;color:#c3c2b7}
+  body:not(.fam-light) .controls button{background:#1a1a19;color:#c3c2b7;border-color:#383835}
+  body:not(.fam-light) .controls button.on{background:#3987e5;color:#0f0e0d;border-color:#3987e5}
+  body:not(.fam-light) .seasonlab{color:#f5f3ec}
+}
+body.fam-dark{background:#1a1a19;color:#c3c2b7}
+body.fam-dark .controls button{background:#1a1a19;color:#c3c2b7;border-color:#383835}
+body.fam-dark .controls button.on{background:#3987e5;color:#0f0e0d;border-color:#3987e5}
+body.fam-dark .seasonlab{color:#f5f3ec}</style><meta charset="utf-8" /></head>
+<body>
+    <div style="height:auto; width:100%;">                        <script>window.PlotlyConfig = {MathJaxConfig: 'local'};</script>
+        <script>/* famplot — the family's SVG chart engine.
+ *
+ * Implements the subset of the Plotly API that the studies' figures use
+ * (newPlot / react / relayout / Plots.resize) and renders them as hand-drawn
+ * SVG in the family chart style: thin marks, 4px rounded data-ends, hairline
+ * grids, surface gaps, a dark-chip tooltip, selective direct labels via the
+ * spec's own annotations. Trace types: scatter (lines / markers / bands /
+ * dashed), bar (vertical, horizontal, grouped), histogram. Anything colors:
+ * whatever hexes the spec carries (the page runtime darkens them for dark
+ * scheme before calling react).
+ *
+ * The interactive plotly originals remain available by running each study's
+ * figure scripts on GitHub (python/0*.py -> figures/*.html).
+ */
+(function () {
+  "use strict";
+
+  var NS = "http://www.w3.org/2000/svg";
+
+  function el(tag, attrs, parent) {
+    var n = document.createElementNS(NS, tag);
+    for (var k in attrs) n.setAttribute(k, attrs[k]);
+    if (parent) parent.appendChild(n);
+    return n;
+  }
+
+  /* plotly's write_html packs numeric arrays as {dtype, bdata(, shape)} —
+   * decode them back to plain arrays so the renderer sees numbers. */
+  var DTYPES = { f8: Float64Array, f4: Float32Array, i4: Int32Array,
+                 i2: Int16Array, i1: Int8Array, u4: Uint32Array,
+                 u2: Uint16Array, u1: Uint8Array };
+  function decode(v) {
+    if (!v || typeof v !== "object" || Array.isArray(v) || !v.bdata) return v;
+    var T = DTYPES[v.dtype] || Float64Array;
+    var bin = atob(v.bdata);
+    var bytes = new Uint8Array(bin.length);
+    for (var i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    var flat = Array.prototype.slice.call(new T(bytes.buffer));
+    var shape = v.shape && String(v.shape).split(",").map(Number);
+    if (shape && shape.length === 2) {
+      var rows = [];
+      for (var r = 0; r < shape[0]; r++) {
+        rows.push(flat.slice(r * shape[1], (r + 1) * shape[1]));
+      }
+      return rows;
+    }
+    return flat;
+  }
+  function decodeTrace(tr) {
+    ["x", "y", "customdata"].forEach(function (k) {
+      if (tr[k] != null) tr[k] = decode(tr[k]);
+    });
+    if (tr.marker) {
+      ["color", "size", "opacity"].forEach(function (k) {
+        if (tr.marker[k] != null) tr.marker[k] = decode(tr.marker[k]);
+      });
+    }
+    ["error_x", "error_y"].forEach(function (k) {
+      var e = tr[k];
+      if (!e) return;
+      ["array", "arrayminus"].forEach(function (a) {
+        if (e[a] != null) e[a] = decode(e[a]);
+      });
+    });
+    return tr;
+  }
+
+  /* Traces without explicit colors take the family categorical order,
+   * assigned by trace index (never re-cycled). Spec-carried colors are
+   * darkened by the page runtime; these engine-side fallbacks pick the
+   * dark steps themselves by checking the theme stamped on the body. */
+  var FAMILY_WAY = ["#2a78d6", "#eb6834", "#1baf7a", "#eda100",
+                    "#e87ba4", "#008300", "#4a3aa7", "#e34948"];
+  var FAMILY_WAY_DARK = ["#3987e5", "#d95926", "#199e70", "#c98500",
+                         "#d55181", "#008300", "#9085e9", "#e66767"];
+  function isDarkDoc() {
+    var b = document.body;
+    if (b && b.classList.contains("fam-dark")) return true;
+    if (b && b.classList.contains("fam-light")) return false;
+    return window.matchMedia &&
+      matchMedia("(prefers-color-scheme: dark)").matches;
+  }
+
+  /* Numeric marker colors map through the trace's colorscale. */
+  function hexToRgb(h) {
+    if (h[0] !== "#") return [128, 128, 128];
+    return [parseInt(h.slice(1, 3), 16), parseInt(h.slice(3, 5), 16),
+            parseInt(h.slice(5, 7), 16)];
+  }
+  function scaleColor(scale, t) {
+    for (var i = 1; i < scale.length; i++) {
+      if (t <= scale[i][0]) {
+        var a = scale[i - 1], b = scale[i];
+        var f = (t - a[0]) / ((b[0] - a[0]) || 1);
+        var ca = hexToRgb(a[1]), cb = hexToRgb(b[1]);
+        return "rgb(" + ca.map(function (v, j) {
+          return Math.round(v + (cb[j] - v) * f);
+        }).join(",") + ")";
+      }
+    }
+    return scale[scale.length - 1][1];
+  }
+
+  function stripTags(s) {
+    return String(s == null ? "" : s)
+      .replace(/<br\s*\/?>/gi, "\n")
+      .replace(/<[^>]+>/g, "")
+      .replace(/&#8220;|&#8221;/g, '"')
+      .replace(/&#8216;|&#8217;/g, "'")
+      .replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">")
+      .replace(/&nbsp;/g, " ");
+  }
+
+  /* ---- d3-format-lite: the specifiers the figures actually use ---- */
+  function fmt(spec, v) {
+    if (v == null || typeof v !== "number" || !isFinite(v)) return String(v);
+    if (!spec) {
+      return String(Math.round(v * 1000) / 1000);
+    }
+    var plus = spec.indexOf("+") >= 0;
+    var comma = spec.indexOf(",") >= 0;
+    var m = spec.match(/\.(\d+)([f%])/);
+    var out;
+    if (m && m[2] === "%") {
+      out = (v * 100).toFixed(+m[1]) + "%";
+    } else if (m) {
+      out = v.toFixed(+m[1]);
+      if (comma) out = commas(out);
+    } else if (comma) {
+      out = commas(String(Math.round(v)));
+    } else {
+      out = String(v);
+    }
+    if (plus && v > 0) out = "+" + out;
+    return out;
+  }
+  function commas(s) {
+    var p = s.split(".");
+    p[0] = p[0].replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+    return p.join(".");
+  }
+
+  /* Fill a hovertemplate for point i of trace tr. */
+  function hover(tr, i, xv, yv) {
+    var t = tr.hovertemplate;
+    if (!t) {
+      var name = tr.name ? tr.name + ": " : "";
+      return name + fmtVal(xv) + ", " + fmtVal(yv);
+    }
+    t = t.replace(/<extra>.*?<\/extra>/g, "");
+    t = t.replace(/%\{([^}]+)\}/g, function (_, expr) {
+      var parts = expr.split(":");
+      var path = parts[0], f = parts.slice(1).join(":");
+      var val;
+      if (path === "x") val = xv;
+      else if (path === "y") val = yv;
+      else if (path === "customdata") {
+        /* A 1-D customdata (one value per point) is referenced whole. */
+        var cd = tr.customdata ? tr.customdata[i] : "";
+        val = Array.isArray(cd) ? cd.join(", ") : (cd == null ? "" : cd);
+      }
+      else if (path.indexOf("customdata[") === 0) {
+        var idx = +path.slice(11, -1);
+        val = tr.customdata && tr.customdata[i] ? tr.customdata[i][idx] : "";
+      } else if (path === "text" || path === "hovertext") {
+        /* Scatter traces carry the point's label in `text` and lead their
+         * template with it ("%{text}<br>xPPS %{x}"). Without this branch it
+         * resolved to "" and every tooltip lost the player's name. */
+        var src = path === "text" ? tr.text : (tr.hovertext || tr.text);
+        val = Array.isArray(src) ? (src[i] == null ? "" : src[i])
+          : (src == null ? "" : src);
+      } else if (path === "fullData.name") val = tr.name || "";
+      else val = "";
+      return typeof val === "number" ? fmt(f, val) : String(val);
+    });
+    return stripTags(t);
+  }
+  function fmtVal(v) {
+    return typeof v === "number" ? fmt(null, v) : String(v);
+  }
+
+  /* Tick labels formatted at the spec's precision can collide (".0%" ticks
+   * every half point read 3%, 3%, 2%, 2%). Add decimals until they differ. */
+  function fmtTicks(spec, vals) {
+    var labs = vals.map(function (v) { return fmt(spec, v); });
+    var m = spec && spec.match(/\.(\d+)([f%])/);
+    for (var extra = 1; m && extra <= 2; extra++) {
+      var uniq = labs.filter(function (s, i) { return labs.indexOf(s) === i; });
+      if (uniq.length === labs.length) break;
+      var s2 = spec.replace(/\.(\d+)([f%])/, "." + (+m[1] + extra) + "$2");
+      labs = vals.map(function (v) { return fmt(s2, v); });
+    }
+    return labs;
+  }
+
+  /* ---- text measurement and wrapping ----
+   * Layout decisions (wrapping, truncation, margins) use the rendered width
+   * of the text, with a per-character estimate when the document cannot
+   * measure (not yet laid out). */
+  var measureNode = null;
+  function textW(s, size, weight) {
+    s = String(s == null ? "" : s);
+    if (!s) return 0;
+    var w = 0;
+    try {
+      if (measureNode && measureNode.ownerSVGElement &&
+          measureNode.ownerSVGElement.isConnected) {
+        measureNode.setAttribute("font-size", size + "px");
+        measureNode.setAttribute("font-weight", weight || "400");
+        measureNode.textContent = s;
+        w = measureNode.getComputedTextLength();
+      }
+    } catch (e) { w = 0; }
+    return w > 0 ? w : s.length * size * 0.56;
+  }
+  function wrapWords(text, maxW, size, weight) {
+    var out = [];
+    String(text).split("\n").forEach(function (para) {
+      var line = "";
+      para.split(" ").forEach(function (word) {
+        var cand = line ? line + " " + word : word;
+        if (line && textW(cand, size, weight) > maxW) {
+          out.push(line); line = word;
+        } else {
+          line = cand;
+        }
+      });
+      if (line) out.push(line);
+    });
+    return out.length ? out : [""];
+  }
+  function fitText(s, maxW, size, weight) {
+    s = String(s);
+    if (textW(s, size, weight) <= maxW) return s;
+    while (s.length > 1 && textW(s + "…", size, weight) > maxW) {
+      s = s.slice(0, -1);
+    }
+    return s.replace(/\s+$/, "") + "…";
+  }
+
+  /* ---- scales ---- */
+  function linScale(d0, d1, r0, r1) {
+    var f = function (v) { return r0 + (v - d0) / (d1 - d0 || 1) * (r1 - r0); };
+    f.d0 = d0; f.d1 = d1;
+    return f;
+  }
+  /* A log axis carries its domain in log10 units (plotly's convention for
+   * `range` on `type:"log"`) while the data stays in linear units, so the
+   * scale takes the log here rather than at every call site. */
+  function log10(v) { return Math.log(v) / Math.LN10; }
+  function logScale(d0, d1, r0, r1) {
+    var f = function (v) {
+      if (!(v > 0)) return NaN;
+      return r0 + (log10(v) - d0) / (d1 - d0 || 1) * (r1 - r0);
+    };
+    f.d0 = d0; f.d1 = d1;
+    return f;
+  }
+  /* Decade ticks, subdivided when the span is short enough to read. Values
+   * come back in data units so the existing formatter labels them 100,
+   * 1,000 rather than 2, 3. */
+  function logTicks(d0, d1) {
+    var lo = Math.floor(Math.min(d0, d1)), hi = Math.ceil(Math.max(d0, d1));
+    var decades = hi - lo;
+    var mant = decades <= 1 ? [1, 2, 3, 5, 7]
+      : decades <= 4 ? [1, 2, 5] : [1];
+    var out = [];
+    for (var e = lo; e <= hi; e++) {
+      for (var i = 0; i < mant.length; i++) {
+        var v = mant[i] * Math.pow(10, e);
+        var l = log10(v);
+        if (l >= Math.min(d0, d1) - 1e-9 && l <= Math.max(d0, d1) + 1e-9) {
+          out.push(v);
+        }
+      }
+    }
+    return out;
+  }
+  function niceTicks(d0, d1, n) {
+    var span = d1 - d0 || 1;
+    var step = Math.pow(10, Math.floor(Math.log(span / n) / Math.LN10));
+    var err = span / n / step;
+    if (err >= 7.5) step *= 10; else if (err >= 3.5) step *= 5;
+    else if (err >= 1.5) step *= 2;
+    var ticks = [];
+    for (var v = Math.ceil(d0 / step) * step; v <= d1 + step / 1e6; v += step) {
+      ticks.push(Math.abs(v) < step / 1e6 ? 0 : Math.round(v * 1e9) / 1e9);
+    }
+    return ticks;
+  }
+
+  /* ---- histogram binning ---- */
+  function binHistogram(tr) {
+    var xs = tr.x.filter(function (v) { return v != null; });
+    var lo = Math.min.apply(null, xs), hi = Math.max.apply(null, xs);
+    var n = tr.nbinsx || Math.ceil(Math.sqrt(xs.length));
+    var step = (hi - lo) / n || 1;
+    var counts = new Array(n).fill(0);
+    xs.forEach(function (v) {
+      var b = Math.min(n - 1, Math.floor((v - lo) / step));
+      counts[b] += 1;
+    });
+    var total = xs.length;
+    return counts.map(function (c, i) {
+      return { x: lo + (i + 0.5) * step, w: step,
+               y: tr.histnorm === "probability" ? c / total : c };
+    });
+  }
+
+  /* ---- tooltip (one per document) ---- */
+  var tip = null;
+  function ensureTip() {
+    if (tip) return tip;
+    tip = document.createElement("div");
+    tip.className = "famplot-tip";
+    var st = document.createElement("style");
+    st.textContent =
+      ".famplot-tip{position:fixed;z-index:30;pointer-events:none;" +
+      "background:#262521;color:#f5f3ec;border-radius:6px;" +
+      "padding:.4rem .6rem;font:12.5px/1.45 system-ui,-apple-system," +
+      "'Segoe UI',sans-serif;box-shadow:0 4px 14px rgba(0,0,0,.28);" +
+      "opacity:0;max-width:260px;white-space:pre-line}" +
+      ".famplot-tip.on{opacity:1}" +
+      "body.fam-dark .famplot-tip{background:#f5f3ec;color:#161512}";
+    document.head.appendChild(st);
+    document.body.appendChild(tip);
+    return tip;
+  }
+  function showTip(evt, text) {
+    var t = ensureTip();
+    t.textContent = text;
+    t.classList.add("on");
+    var pad = 12;
+    var x = evt.clientX + pad, y = evt.clientY + pad;
+    var r = t.getBoundingClientRect();
+    if (x + r.width > innerWidth - 6) x = evt.clientX - r.width - pad;
+    if (y + r.height > innerHeight - 6) y = evt.clientY - r.height - pad;
+    t.style.left = x + "px"; t.style.top = y + "px";
+  }
+  function hideTip() { if (tip) tip.classList.remove("on"); }
+
+  /* Tell the embedding page how tall this figure really is (the chart's
+   * height depends on the frame's width, and controls can sit above it), so
+   * the frame fits it instead of clipping or leaving a gap. */
+  var heightTimer = null;
+  function postHeight() {
+    if (window.parent === window) return;
+    clearTimeout(heightTimer);
+    heightTimer = setTimeout(function () {
+      var bottom = 0;
+      Array.prototype.forEach.call(document.querySelectorAll("svg"),
+        function (s) {
+          var r = s.getBoundingClientRect();
+          bottom = Math.max(bottom, r.bottom + (window.scrollY || 0));
+        });
+      if (bottom > 0) {
+        try { window.parent.postMessage({ famHeight: Math.ceil(bottom) }, "*"); }
+        catch (e) {}
+      }
+    }, 30);
+  }
+
+  /* ---- the renderer ---- */
+  function render(gd) {
+    var data = gd.data || [], layout = gd.layout || {};
+    gd.textContent = "";
+    var W = gd.clientWidth || layout.width || 700;
+    var H = layout.height || 480;
+    var mobile = W < 640;
+    // Category-row charts keep their height (rows must stay readable);
+    // x-y charts scale down with the viewport.
+    var hasHBars = data.some(function (tr) {
+      return tr.type === "bar" && tr.orientation === "h" &&
+        tr.visible !== false;
+    });
+    if (W < 560 && !hasHBars) H = Math.max(300, Math.round(H * (W / 560)));
+    var mg = layout.margin || {};
+    var M = { l: mg.l != null ? mg.l : 60, r: mg.r != null ? mg.r : 30,
+              t: mg.t != null ? mg.t : 60, b: mg.b != null ? mg.b : 50 };
+    if (W < 700 && M.r > 40) M.r = 24;
+    if (mobile && M.l > 108) M.l = 108;
+    var fontCol = (layout.font && layout.font.color) || "#52514e";
+    var titleCol = (layout.title && layout.title.font &&
+                    layout.title.font.color) || fontCol;
+    var XA = layout.xaxis || {}, YA = layout.yaxis || {};
+    var grid = XA.gridcolor || YA.gridcolor || "#e1e0d9";
+    var axline = XA.linecolor || YA.linecolor || "#c3c2b7";
+
+    var svg = el("svg", { viewBox: "0 0 " + W + " " + H, width: "100%",
+                          role: "img" }, gd);
+    svg.style.display = "block";
+    svg.style.fontFamily = (layout.font && layout.font.family) ||
+      "system-ui, -apple-system, 'Segoe UI', sans-serif";
+    var bgRect = el("rect", { x: 0, y: 0, width: W, height: H,
+                 fill: layout.paper_bgcolor || "#fcfcfb" }, svg);
+    measureNode = el("text", { x: -9999, y: -9999, "aria-hidden": "true" },
+                     svg);
+
+    /* title: wrap to the actual width so narrow screens never clip it. The
+     * first paragraph is the title (bold on every wrapped line); a <br>
+     * starts the subtitle, set regular. */
+    var titleText = stripTags(layout.title && layout.title.text);
+    var titleEnd = 4;
+    if (titleText) {
+      var tfs = mobile ? 13.5 : 15;
+      var tl = [];
+      titleText.split("\n").forEach(function (para, pi) {
+        wrapWords(para, W - M.l - 12, tfs, pi === 0 ? "600" : "400")
+          .forEach(function (s) { tl.push({ s: s, sub: pi > 0 }); });
+      });
+      tl.forEach(function (ln, i) {
+        var tt = el("text", { x: M.l, y: 22 + i * (tfs + 4),
+          fill: ln.sub ? fontCol : titleCol, "font-size": tfs + "px",
+          "font-weight": ln.sub ? "400" : "600" }, svg);
+        tt.textContent = ln.s;
+      });
+      titleEnd = 22 + (tl.length - 1) * (tfs + 4) + 6;
+      var needT = 30 + tl.length * (tfs + 4);
+      if (M.t < needT) M.t = needT;
+    }
+
+    /* ---- assemble series geometry ---- */
+    var tIdx = new Map();
+    data.forEach(function (tr, i) { tIdx.set(tr, i); });
+    function traceColor(tr) {
+      if (tr.line && tr.line.color) return tr.line.color;
+      if (tr.marker && typeof tr.marker.color === "string") {
+        return tr.marker.color;
+      }
+      var way = isDarkDoc() ? FAMILY_WAY_DARK : FAMILY_WAY;
+      return way[(tIdx.get(tr) || 0) % way.length];
+    }
+    /* Per-bar literal colors (an earlier/exposed split, a highlight). */
+    function barColor(tr, i) {
+      var mc = tr.marker && tr.marker.color;
+      if (Array.isArray(mc) && typeof mc[i] === "string") return mc[i];
+      return traceColor(tr);
+    }
+    var bars = [], hbars = [], lines = [], points = [], bands = [];
+    var catX = XA.type === "category";
+    var catY = YA.type === "category";
+    var xCats = [], yCats = [];
+    var prevScatter = null;
+    data.forEach(function (tr) {
+      if (tr.visible === false) return;
+      var type = tr.type || "scatter";
+      if (type === "histogram") {
+        binHistogram(tr).forEach(function (b) {
+          bars.push({ tr: tr, x: b.x, y: b.y, w: b.w, i: -1 });
+        });
+      } else if (type === "bar" && tr.orientation === "h") {
+        (tr.y || []).forEach(function (yv, i) {
+          yCats.indexOf(yv) < 0 && yCats.push(yv);
+          hbars.push({ tr: tr, cat: yv, v: tr.x[i], i: i });
+        });
+      } else if (type === "bar") {
+        (tr.x || []).forEach(function (xv, i) {
+          if (catX || typeof xv === "string") {
+            xCats.indexOf(xv) < 0 && xCats.push(xv);
+          }
+          bars.push({ tr: tr, x: xv, y: tr.y[i], i: i });
+        });
+      } else { /* scatter */
+        var mode = tr.mode || "lines";
+        if (tr.fill === "toself") {
+          bands.push({ tr: tr, xs: tr.x, ys: tr.y });
+        } else if (tr.fill === "tonexty") {
+          /* plotly fills to the previous scatter trace (a percentile band
+           * is drawn as lower bound, then upper bound with tonexty); only
+           * the first trace has nothing before it and fills to the axis. */
+          bands.push({ tr: tr, xs: tr.x, ys: tr.y, tonext: true,
+                       prev: prevScatter });
+          if (mode.indexOf("lines") >= 0 &&
+              !(tr.line && tr.line.width === 0)) lines.push(tr);
+        } else {
+          if (mode.indexOf("lines") >= 0) lines.push(tr);
+          if (mode.indexOf("markers") >= 0) {
+            (tr.x || []).forEach(function (xv, i) {
+              if (catX || typeof xv === "string") {
+                xCats.indexOf(xv) < 0 && xCats.push(xv);
+              }
+              /* A dot plot against named rows (players, teams) arrives as a
+               * scatter whose y values are strings; band them like the
+               * horizontal-bar path rather than scaling them as numbers. */
+              var yv = tr.y ? tr.y[i] : null;
+              if (catY || typeof yv === "string") {
+                yCats.indexOf(yv) < 0 && yCats.push(yv);
+              }
+              points.push({ tr: tr, x: xv, y: yv, i: i });
+            });
+          }
+        }
+        prevScatter = tr;
+      }
+    });
+    var barTraces = [];
+    data.forEach(function (tr) {
+      if ((tr.type === "bar" || tr.type === "histogram") &&
+          barTraces.indexOf(tr) < 0) barTraces.push(tr);
+    });
+
+    /* ---- domains ---- */
+    function extent(vals, pad, zero) {
+      var lo = Infinity, hi = -Infinity;
+      vals.forEach(function (v) {
+        if (typeof v === "number" && isFinite(v)) {
+          if (v < lo) lo = v; if (v > hi) hi = v;
+        }
+      });
+      if (lo === Infinity) { lo = 0; hi = 1; }
+      if (zero && lo > 0) lo = 0;
+      if (zero && hi < 0) hi = 0;
+      var span = (hi - lo) || Math.abs(hi) || 1;
+      return [lo - (zero && lo === 0 ? 0 : span * pad), hi + span * pad];
+    }
+    var xs = [], ys = [];
+    bands.forEach(function (b) { xs = xs.concat(b.xs); ys = ys.concat(b.ys); });
+    lines.forEach(function (tr) { xs = xs.concat(tr.x); ys = ys.concat(tr.y); });
+    /* Error bars widen the axis they run along: a CI whisker that reaches
+     * past the last dot must still land inside the plotting surface. */
+    function errSpan(tr, key, v, i) {
+      var e = tr[key];
+      if (!e || e.visible === false ||
+          typeof v !== "number" || !isFinite(v)) return [v];
+      var plus = Array.isArray(e.array) ? e.array[i] : e.array;
+      var minus = e.symmetric === false
+        ? (Array.isArray(e.arrayminus) ? e.arrayminus[i] : e.arrayminus)
+        : plus;
+      if (typeof plus !== "number" || !isFinite(plus)) plus = 0;
+      if (typeof minus !== "number" || !isFinite(minus)) minus = 0;
+      return [v - minus, v + plus];
+    }
+    points.forEach(function (p) {
+      xs = xs.concat(errSpan(p.tr, "error_x", p.x, p.i));
+      ys = ys.concat(errSpan(p.tr, "error_y", p.y, p.i));
+    });
+    bars.forEach(function (b) {
+      if (typeof b.x === "number") { xs.push(b.x - (b.w || 1) / 2); xs.push(b.x + (b.w || 1) / 2); }
+      ys.push(b.y);
+    });
+    hbars.forEach(function (b) { xs.push(b.v); });
+
+    var zeroY = bars.length > 0, zeroX = hbars.length > 0;
+    /* On a log axis the domain lives in log10 units, so the extent is taken
+     * over the logged values. Non-positive values have no place on one and
+     * drop out rather than poisoning the range. */
+    var logX = XA.type === "log", logY = YA.type === "log";
+    function logged(vals) {
+      var out = [];
+      vals.forEach(function (v) {
+        if (typeof v === "number" && isFinite(v) && v > 0) out.push(log10(v));
+      });
+      return out;
+    }
+    var xd = XA.range ? XA.range.slice()
+      : logX ? extent(logged(xs), 0.04, false) : extent(xs, 0.04, zeroX);
+    var yd = YA.range ? YA.range.slice()
+      : logY ? extent(logged(ys), 0.06, false) : extent(ys, 0.06, zeroY);
+
+    var usingXCats = xCats.length > 0 && (bars.length || points.length);
+    var usingYCats = yCats.length > 0;
+
+    /* ---- layout planning ----
+     * Row labels, legend rows, wrapped tick labels and wrapped axis titles
+     * claim their room before the plot area is fixed, so on a phone nothing
+     * overprints a neighbor or runs off the edge. Growth at the top or
+     * bottom adds to the figure height (the page sizes each frame to it)
+     * rather than squeezing the plot. */
+    var xt = stripTags(XA.title && XA.title.text);
+    var yt = stripTags(YA.title && YA.title.text);
+    var yCatSize = (YA.tickfont && YA.tickfont.size) || 11.5;
+    if (usingYCats) {
+      var widest = Math.max.apply(null, yCats.map(function (c) {
+        return textW(stripTags(c), yCatSize);
+      }));
+      var needL = 14 + widest + (yt ? 18 : 0);
+      var capL = W * (mobile ? 0.42 : 0.3);
+      if (M.l < needL) M.l = Math.round(Math.min(needL, Math.max(M.l, capL)));
+    }
+
+    /* Direct labels at a line's right end live in the right margin. On a
+     * narrow screen that margin is cut to 24px, so size it to the widest
+     * end label instead (capped), or the label prints across its line. */
+    if (W < 700 && mg.r != null && mg.r > 40) {
+      var needR = 0, lastCat = xCats[xCats.length - 1];
+      (layout.annotations || []).forEach(function (an) {
+        if (/domain|paper/.test(an.xref || "")) return;
+        if (an.xanchor && an.xanchor !== "left") return;
+        var atEnd = typeof an.x === "number"
+          ? an.x >= xd[1] - 0.12 * (xd[1] - xd[0])
+          : an.x === lastCat;
+        if (!atEnd) return;
+        var size = (an.font && an.font.size) || 11.5;
+        var widestLine = Math.max.apply(null,
+          stripTags(an.text).split("\n").map(function (s) {
+            return textW(s, size);
+          }));
+        needR = Math.max(needR, (an.xshift || 0) + widestLine + 8);
+      });
+      if (needR > M.r) M.r = Math.round(Math.min(needR, W * 0.32));
+    }
+
+    var legendTraces = data.filter(function (tr) {
+      return tr.name && tr.showlegend !== false &&
+        (layout.showlegend !== false || tr.showlegend === true);
+    });
+    if (layout.showlegend === false) legendTraces = [];
+    var legendItems = [], legendRows = 0, legendBase = 0;
+    if (legendTraces.length > 1) {
+      var lxp = M.l, lrow = 0;
+      legendTraces.forEach(function (tr) {
+        var name = fitText(stripTags(tr.name), W - M.l - 8 - 21, 12);
+        var w = 21 + textW(name, 12);
+        if (lxp > M.l && lxp + w > W - 8) { lxp = M.l; lrow += 1; }
+        legendItems.push({ tr: tr, name: name, x: lxp, row: lrow });
+        lxp += w + 16;
+      });
+      legendRows = lrow + 1;
+      legendBase = Math.max(titleEnd + 14, M.t - 12 - (legendRows - 1) * 16);
+      var needTop = legendBase + (legendRows - 1) * 16 + 14;
+      if (M.t < needTop) { H += needTop - M.t; M.t = needTop; }
+    }
+
+    var pw = W - M.l - M.r;
+    var xTickSize = usingXCats ? 11 : 12;
+    var xTicks = null, tickLines = 1;
+    var useTickText = !usingXCats && !logX && XA.tickvals && XA.ticktext;
+    if (usingXCats || useTickText) {
+      var raw = [];
+      if (usingXCats) {
+        var tv = XA.tickvals;
+        xCats.forEach(function (c, i) {
+          if (tv && tv.indexOf(c) < 0) return;
+          var lab = tv && XA.ticktext ? XA.ticktext[tv.indexOf(c)] : c;
+          raw.push({ v: c, px: (i + 0.5) * pw / xCats.length,
+                     lab: stripTags(lab) });
+        });
+      } else {
+        var xlo = Math.min(xd[0], xd[1]), xhi = Math.max(xd[0], xd[1]);
+        XA.tickvals.forEach(function (v, i) {
+          if (v < xlo || v > xhi) return;
+          raw.push({ v: v, px: (v - xd[0]) / ((xd[1] - xd[0]) || 1) * pw,
+                     lab: stripTags(XA.ticktext[i]) });
+        });
+      }
+      var gap = pw;
+      for (var k = 1; k < raw.length; k++) {
+        gap = Math.min(gap, Math.abs(raw[k].px - raw[k - 1].px));
+      }
+      /* Keep every label when it can wrap into its slot (up to four lines
+       * for a handful of named groups, three otherwise), stepping the font
+       * down once; only then thin to every n-th label. Dropping a group's
+       * name loses information, a long time axis loses nothing. */
+      var maxLines = raw.length <= 8 ? 4 : 3;
+      var sizes = raw.length <= 8 ? [xTickSize, xTickSize - 1, xTickSize - 1.5]
+        : [xTickSize, xTickSize - 1];
+      var done = false;
+      for (var every = 1; !done; every++) {
+        for (var si = 0; si < sizes.length && !done; si++) {
+          var sz = sizes[si], slot = gap * every - 6, fits = true, most = 1;
+          var planned = raw.filter(function (_, i) { return i % every === 0; })
+            .map(function (t) {
+              var ls = wrapWords(t.lab, slot, sz);
+              ls.forEach(function (s) {
+                if (textW(s, sz) > slot + 2) fits = false;
+              });
+              if (ls.length > maxLines) fits = false;
+              most = Math.max(most, ls.length);
+              return { v: t.v, lines: ls };
+            });
+          if (fits || every >= raw.length) {
+            xTicks = planned; tickLines = most; xTickSize = sz; done = true;
+          }
+        }
+      }
+    }
+    var xtLines = xt ? wrapWords(xt, W - 16, 12) : [];
+    var needB = 18 + (tickLines - 1) * 13 +
+      (xtLines.length ? 12 + xtLines.length * 14 : 8);
+    if (M.b < needB) { H += needB - M.b; M.b = needB; }
+    var ph = H - M.t - M.b;
+    svg.setAttribute("viewBox", "0 0 " + W + " " + H);
+    bgRect.setAttribute("height", H);
+    var plot = el("g", {}, svg);
+    /* Plotly puts the first category at the BOTTOM of a y axis, and
+     * autorange:"reversed" puts it at the top. Row index 0 is drawn at the
+     * top here, so an un-reversed axis has to be flipped or the ranking
+     * reads upside down. */
+    if (usingYCats && YA.autorange !== "reversed") {
+      yCats = yCats.slice().reverse();
+    }
+    var X, Y, xBand = 0, yBand = 0;
+    if (usingXCats) {
+      xBand = pw / xCats.length;
+      X = function (v) { return M.l + xCats.indexOf(v) * xBand + xBand / 2; };
+    } else {
+      X = (logX ? logScale : linScale)(xd[0], xd[1], M.l, M.l + pw);
+    }
+    if (usingYCats) {
+      yBand = ph / yCats.length;
+      Y = function (v) { return M.t + yCats.indexOf(v) * yBand + yBand / 2; };
+    } else {
+      Y = (logY ? logScale : linScale)(yd[0], yd[1], M.t + ph, M.t);
+    }
+
+    /* ---- grid + ticks ---- */
+    var tickCls = { fill: XA.tickfont && XA.tickfont.size
+      ? fontCol : fontCol };
+    function tickText(x, y, s, anchor, size) {
+      var t = el("text", { x: x, y: y, fill: fontCol,
+        "font-size": (size || 12) + "px", "text-anchor": anchor }, svg);
+      t.textContent = s;
+      return t;
+    }
+    if (!usingYCats) {
+      var yTickVals = (logY ? logTicks(yd[0], yd[1])
+        : niceTicks(yd[0], yd[1], Math.max(3, Math.round(ph / 70))))
+        .filter(function (v) {
+          var y = Y(v);
+          return y >= M.t - 1 && y <= M.t + ph + 1;
+        });
+      var yLabs = fmtTicks(YA.tickformat, yTickVals);
+      yTickVals.forEach(function (v, i) {
+        var y = Y(v);
+        el("line", { x1: M.l, y1: y, x2: M.l + pw, y2: y,
+                     stroke: grid, "stroke-width": 1 }, plot);
+        tickText(M.l - 8, y + 4, yLabs[i], "end");
+      });
+    } else {
+      var rowRoom = M.l - 12 - (yt ? 18 : 0);
+      yCats.forEach(function (c) {
+        var lab = stripTags(c);
+        // a row with room for two lines wraps rather than truncating
+        var s2 = yCatSize - 1;
+        if (textW(lab, yCatSize) > rowRoom && yBand >= 2 * s2 + 1) {
+          var two = wrapWords(lab, rowRoom, s2);
+          if (two.length > 2) {
+            two = [two[0], fitText(two.slice(1).join(" "), rowRoom, s2)];
+          }
+          if (two.length === 2) {
+            tickText(M.l - 8, Y(c) - 1.5, two[0], "end", s2);
+            tickText(M.l - 8, Y(c) - 1.5 + s2 + 1, two[1], "end", s2);
+            return;
+          }
+        }
+        tickText(M.l - 8, Y(c) + 3.5, fitText(lab, rowRoom, yCatSize),
+                 "end", yCatSize);
+      });
+    }
+    if (xTicks) {
+      xTicks.forEach(function (t) {
+        var x = X(t.v);
+        if (!usingXCats && (x < M.l - 1 || x > M.l + pw + 1)) return;
+        if (!usingXCats && (hbars.length || usingYCats)) {
+          el("line", { x1: x, y1: M.t, x2: x, y2: M.t + ph,
+                       stroke: grid, "stroke-width": 1 }, plot);
+        }
+        // keep the outermost labels inside the frame
+        var half = Math.max.apply(null, t.lines.map(function (s) {
+          return textW(s, xTickSize);
+        })) / 2;
+        var cxl = Math.min(Math.max(x, half + 4), W - half - 4);
+        t.lines.forEach(function (s, i) {
+          tickText(cxl, M.t + ph + 18 + i * 13, s, "middle", xTickSize);
+        });
+      });
+    } else {
+      var xTickVals = (logX ? logTicks(xd[0], xd[1])
+        : niceTicks(xd[0], xd[1], Math.max(3, Math.round(pw / 90))))
+        .filter(function (v) {
+          var x = X(v);
+          return x >= M.l - 1 && x <= M.l + pw + 1;
+        });
+      var xLabs = fmtTicks(XA.tickformat, xTickVals);
+      xTickVals.forEach(function (v, i) {
+        var x = X(v);
+        if (hbars.length || usingYCats) {
+          el("line", { x1: x, y1: M.t, x2: x, y2: M.t + ph,
+                       stroke: grid, "stroke-width": 1 }, plot);
+        }
+        tickText(x, M.t + ph + 18, xLabs[i], "middle");
+      });
+    }
+    el("line", { x1: M.l, y1: M.t + ph, x2: M.l + pw, y2: M.t + ph,
+                 stroke: axline, "stroke-width": 1 }, plot);
+    if (hbars.length || usingYCats ||
+        (!usingXCats && xd[0] < 0 && xd[1] > 0)) {
+      el("line", { x1: M.l, y1: M.t, x2: M.l, y2: M.t + ph,
+                   stroke: axline, "stroke-width": 1 }, plot);
+    }
+
+    /* axis titles */
+    xtLines.forEach(function (s, i) {
+      var cxt = Math.min(Math.max(M.l + pw / 2, textW(s, 12) / 2 + 4),
+                         W - textW(s, 12) / 2 - 4);
+      tickText(cxt, H - 10 - (xtLines.length - 1 - i) * 14, s, "middle");
+    });
+    if (yt) {
+      var ty = el("text", { x: 0, y: 0, fill: fontCol, "font-size": "12px",
+        "text-anchor": "middle",
+        transform: "translate(14," + (M.t + ph / 2) + ") rotate(-90)" }, svg);
+      ty.textContent = fitText(yt,
+        2 * Math.min(M.t + ph / 2, H - M.t - ph / 2) - 8, 12);
+    }
+
+    var surface = layout.plot_bgcolor || layout.paper_bgcolor || "#fcfcfb";
+
+    /* ---- bands (confidence fills) ---- */
+    bands.forEach(function (b) {
+      var d = "";
+      b.xs.forEach(function (xv, i) {
+        d += (i ? "L" : "M") + X(xv) + "," + Y(b.ys[i]);
+      });
+      if (b.tonext && b.prev && b.prev.x && b.prev.y) {
+        for (var j = b.prev.x.length - 1; j >= 0; j--) {
+          if (b.prev.y[j] == null) continue;
+          d += "L" + X(b.prev.x[j]) + "," + Y(b.prev.y[j]);
+        }
+      } else if (b.tonext) {
+        d += "L" + X(b.xs[b.xs.length - 1]) + "," + (M.t + ph) +
+             "L" + X(b.xs[0]) + "," + (M.t + ph);
+      }
+      el("path", { d: d + "Z", fill: b.tr.fillcolor ||
+        "rgba(42,120,214,0.15)", stroke: "none" }, plot);
+    });
+
+    /* Value labels on a bar. Only bars: on a scatter, `text` is the hover
+     * payload unless the mode explicitly asks for "text", and drawing it
+     * would stamp 450 player names across a scatterplot. */
+    function barLabel(tr, i, cx, top, value, room) {
+      if (!tr.text || tr.textposition === "none") return;
+      var lab = Array.isArray(tr.text) ? tr.text[i] : tr.text;
+      if (lab == null || lab === "") return;
+      var tf = tr.textfont || {};
+      var size = tf.size || 11;
+      // shrink to the bar's slot so neighbors never overprint; drop the
+      // label when even 8.5px will not fit
+      if (room) {
+        while (size > 8.5 && textW(stripTags(lab), size) > room) size -= 0.5;
+        if (textW(stripTags(lab), size) > room) return;
+      }
+      var inside = tr.textposition === "inside";
+      var t = el("text", {
+        x: cx, y: inside ? top + size + 4 : top - 5,
+        fill: tf.color || fontCol, "font-size": size + "px",
+        "text-anchor": "middle"
+      }, svg);
+      t.textContent = stripTags(lab);
+      return t;
+    }
+
+    /* The same, past the end of a horizontal bar. */
+    function hbarLabel(tr, i, endX, midY) {
+      if (!tr.text || tr.textposition === "none") return;
+      var lab = Array.isArray(tr.text) ? tr.text[i] : tr.text;
+      if (lab == null || lab === "") return;
+      var tf = tr.textfont || {};
+      var size = tf.size || 11;
+      var inside = tr.textposition === "inside";
+      var t = el("text", {
+        x: inside ? endX - 6 : endX + 6, y: midY + size * 0.35,
+        fill: tf.color || fontCol, "font-size": size + "px",
+        "text-anchor": inside ? "end" : "start"
+      }, svg);
+      t.textContent = stripTags(lab);
+      return t;
+    }
+
+    /* ---- vertical bars (incl. histogram, grouped) ---- */
+    if (bars.length) {
+      var groups = barTraces.filter(function (t) {
+        return bars.some(function (b) { return b.tr === t; });
+      });
+      var gN = layout.barmode === "group" ? groups.length : 1;
+      bars.forEach(function (b) {
+        var slot = usingXCats ? xBand
+          : (b.w ? X(b.w) - X(0) : pw / Math.max(bars.length / gN, 1));
+        var bw = Math.min(24, (slot - 2) / gN - (gN > 1 ? 2 : 0));
+        if (bw < 1) bw = Math.max(1, slot / gN - 1);
+        var gi = gN > 1 ? groups.indexOf(b.tr) : 0;
+        var cx = X(b.x) - (gN * bw + (gN - 1) * 2) / 2 + gi * (bw + 2);
+        var y0 = Y(Math.max(0, yd[0])), y1 = Y(b.y);
+        var top = Math.min(y0, y1), hgt = Math.abs(y0 - y1);
+        var r = Math.min(4, bw / 2, hgt);
+        var dPath = "M" + cx + "," + (top + hgt) +
+          "V" + (top + r) +
+          "Q" + cx + "," + top + " " + (cx + r) + "," + top +
+          "H" + (cx + bw - r) +
+          "Q" + (cx + bw) + "," + top + " " + (cx + bw) + "," + (top + r) +
+          "V" + (top + hgt) + "Z";
+        var node = el("path", { d: dPath, fill: barColor(b.tr, b.i) }, plot);
+        attachHover(node, b.tr, b.i, b.x, b.y);
+        barLabel(b.tr, b.i, cx + bw / 2, top, b.y,
+                 Math.max(bw, slot / gN) - 4);
+      });
+    }
+
+    /* ---- horizontal bars (grouped like the vertical path) ---- */
+    var hGroups = barTraces.filter(function (t) {
+      return hbars.some(function (b) { return b.tr === t; });
+    });
+    var hN = layout.barmode === "group" ? hGroups.length : 1;
+    hbars.forEach(function (b) {
+      var bh = Math.min(24, (yBand - 8 - (hN - 1) * 2) / hN);
+      var gi = hN > 1 ? hGroups.indexOf(b.tr) : 0;
+      var cy = b.cat == null ? 0
+        : Y(b.cat) - (hN * bh + (hN - 1) * 2) / 2 + gi * (bh + 2);
+      var x0 = X(Math.max(0, xd[0])), x1 = X(b.v);
+      var left = Math.min(x0, x1), wid = Math.abs(x1 - x0);
+      var r = Math.min(4, bh / 2, wid);
+      var dPath = "M" + left + "," + cy +
+        "H" + (left + wid - r) +
+        "Q" + (left + wid) + "," + cy + " " + (left + wid) + "," + (cy + r) +
+        "V" + (cy + bh - r) +
+        "Q" + (left + wid) + "," + (cy + bh) + " " + (left + wid - r) + "," + (cy + bh) +
+        "H" + left + "Z";
+      var node = el("path", { d: dPath, fill: barColor(b.tr, b.i) }, plot);
+      attachHover(node, b.tr, b.i, b.v, b.cat, true);
+      hbarLabel(b.tr, b.i, left + wid, cy + bh / 2);
+    });
+
+    /* ---- lines ---- */
+    var linePts = [];
+    lines.forEach(function (tr) {
+      var d = "";
+      (tr.x || []).forEach(function (xv, i) {
+        var yv = tr.y[i];
+        if (yv == null) return;
+        d += (d ? "L" : "M") + X(xv) + "," + Y(yv);
+        linePts.push({ tr: tr, x: xv, y: yv, px: X(xv), py: Y(yv), i: i });
+      });
+      var ln = tr.line || {};
+      el("path", { d: d, fill: "none", stroke: ln.color || traceColor(tr),
+        "stroke-width": ln.width != null ? ln.width : 2,
+        "stroke-linejoin": "round", "stroke-linecap": "round",
+        "stroke-dasharray": ln.dash === "dot" ? "2,4"
+          : ln.dash === "dash" ? "7,4" : "none" }, plot);
+    });
+
+    /* ---- error bars (drawn under the markers they belong to) ---- */
+    points.forEach(function (p) {
+      if (p.y == null) return;
+      ["error_x", "error_y"].forEach(function (key) {
+        var e = p.tr[key];
+        if (!e || e.visible === false) return;
+        var horiz = key === "error_x";
+        var v = horiz ? p.x : p.y;
+        if (typeof v !== "number" || !isFinite(v)) return;
+        var plus = Array.isArray(e.array) ? e.array[p.i] : e.array;
+        var minus = e.symmetric === false
+          ? (Array.isArray(e.arrayminus) ? e.arrayminus[p.i] : e.arrayminus)
+          : plus;
+        if (typeof plus !== "number" || !isFinite(plus)) plus = 0;
+        if (typeof minus !== "number" || !isFinite(minus)) minus = 0;
+        if (!plus && !minus) return;
+        var lo = horiz ? X(v - minus) : Y(v - minus);
+        var hi = horiz ? X(v + plus) : Y(v + plus);
+        var at = horiz ? Y(p.y) : X(p.x);
+        el("line", {
+          x1: horiz ? lo : at, y1: horiz ? at : lo,
+          x2: horiz ? hi : at, y2: horiz ? at : hi,
+          stroke: e.color || axline,
+          "stroke-width": e.thickness != null ? e.thickness : 1,
+          "stroke-linecap": "round"
+        }, plot);
+      });
+    });
+
+    /* ---- markers ---- */
+    points.forEach(function (p) {
+      if (p.y == null) return;
+      var mk = p.tr.marker || {};
+      var msize = Array.isArray(mk.size) ? mk.size[p.i] : mk.size;
+      if (typeof msize !== "number" || !isFinite(msize)) msize = 8;
+      var r = Math.max(3.5, msize / 2);
+      var fill;
+      if (Array.isArray(mk.color) && typeof mk.color[0] === "string") {
+        /* Per-point literal colors (a sign split, a highlight set). */
+        fill = mk.color[p.i] || traceColor(p.tr);
+      } else if (Array.isArray(mk.color)) {
+        var vals = mk.color;
+        var lo = mk.cmin != null ? mk.cmin : Math.min.apply(null, vals);
+        var hi = mk.cmax != null ? mk.cmax : Math.max.apply(null, vals);
+        var tval = (vals[p.i] - lo) / ((hi - lo) || 1);
+        fill = scaleColor(mk.colorscale || [[0, "#cde2fb"], [1, "#0d366b"]],
+                          Math.max(0, Math.min(1, tval)));
+      } else {
+        fill = mk.color || traceColor(p.tr);
+      }
+      el("circle", { cx: X(p.x), cy: Y(p.y), r: r + 2, fill: surface }, plot);
+      var node = el("circle", { cx: X(p.x), cy: Y(p.y), r: r, fill: fill,
+        "fill-opacity": mk.opacity != null ? mk.opacity : 1 }, plot);
+      attachHover(node, p.tr, p.i, p.x, p.y);
+    });
+
+    /* ---- colorbar (numeric marker colors with showscale) ---- */
+    data.forEach(function (tr) {
+      var mk = tr.marker || {};
+      if (!Array.isArray(mk.color) || !mk.showscale || M.r < 60) return;
+      var scale = mk.colorscale || [[0, "#cde2fb"], [1, "#0d366b"]];
+      var vals = mk.color;
+      var lo = mk.cmin != null ? mk.cmin : Math.min.apply(null, vals);
+      var hi = mk.cmax != null ? mk.cmax : Math.max.apply(null, vals);
+      var cbX = W - M.r + 24, cbH = Math.round(ph * 0.7);
+      var cbY = M.t + (ph - cbH) / 2;
+      var gid = "famgrad" + Math.abs((gd.id || "g").split("")
+        .reduce(function (a, c) { return a + c.charCodeAt(0); }, 0));
+      var defs = el("defs", {}, svg);
+      var grad = el("linearGradient",
+        { id: gid, x1: 0, y1: 1, x2: 0, y2: 0 }, defs);
+      scale.forEach(function (st) {
+        el("stop", { offset: (st[0] * 100) + "%", "stop-color": st[1] }, grad);
+      });
+      el("rect", { x: cbX, y: cbY, width: 10, height: cbH, rx: 3,
+                   fill: "url(#" + gid + ")" }, svg);
+      tickText(cbX + 15, cbY + 9, fmt(".2f", hi), "start", 10.5);
+      tickText(cbX + 15, cbY + cbH, fmt(".2f", lo), "start", 10.5);
+      var cbTitle = mk.colorbar && mk.colorbar.title &&
+        stripTags(mk.colorbar.title.text);
+      if (cbTitle) tickText(cbX - 4, cbY - 10, cbTitle, "start", 11);
+    });
+
+    /* ---- shapes (reference lines) ---- */
+    (layout.shapes || []).forEach(function (sh) {
+      if (sh.type !== "line") return;
+      var ln = sh.line || {};
+      var vertical = sh.x0 === sh.x1;
+      var coords;
+      function cx(v, ref) {
+        return /domain|paper/.test(ref || "") ? M.l + pw * v : X(v);
+      }
+      function cy(v, ref) {
+        return /domain|paper/.test(ref || "") ? M.t + ph * (1 - v) : Y(v);
+      }
+      if (vertical) {
+        coords = { x1: cx(sh.x0, sh.xref), x2: cx(sh.x0, sh.xref),
+                   y1: cy(sh.y0, sh.yref), y2: cy(sh.y1, sh.yref) };
+      } else {
+        coords = { x1: cx(sh.x0, sh.xref), x2: cx(sh.x1, sh.xref),
+                   y1: cy(sh.y0, sh.yref), y2: cy(sh.y0, sh.yref) };
+      }
+      coords.stroke = ln.color || axline;
+      coords["stroke-width"] = ln.width != null ? ln.width : 1.5;
+      if (ln.dash) coords["stroke-dasharray"] = "2,4";
+      el("line", coords, plot);
+    });
+
+    /* ---- annotations ---- */
+    (layout.annotations || []).forEach(function (an) {
+      var ax = /domain|paper/.test(an.xref || "")
+        ? M.l + pw * an.x : X(an.x);
+      var ay = an.yref && /domain|paper/.test(an.yref)
+        ? M.t + ph * (1 - an.y) : (an.y != null ? Y(an.y) : M.t + 14);
+      ax += (an.xshift || 0); ay -= (an.yshift || 0);
+      var anchor = an.xanchor === "right" ? "end"
+        : an.xanchor === "center" ? "middle" : "start";
+      /* plotly pads annotation text about 3px off its anchor point; without
+       * it a label anchored on a reference line starts on top of it. */
+      if (anchor === "start") ax += 3;
+      else if (anchor === "end") ax -= 3;
+      var col = (an.font && an.font.color) || fontCol;
+      var size = (an.font && an.font.size) || 11.5;
+      var linesA = stripTags(an.text).split("\n");
+      // Width-aware clamping so annotation text never leaves the svg.
+      var est = Math.max.apply(null, linesA.map(function (s) {
+        return s.length;
+      })) * size * 0.52;
+      if (anchor === "start" && ax + est > W - 8) {
+        anchor = "end";
+        ax = Math.max(ax, Math.min(8 + est, W - 8));
+        /* A direct label at a line's end that no longer fits to its right
+         * flips back over the line; lift it clear of the line instead of
+         * printing across it. */
+        if (!(an.yref && /domain|paper/.test(an.yref))) ay -= size + 1;
+      } else if (anchor === "end" && ax - est < 8) {
+        ax = Math.min(8 + est, W - 8);
+      } else if (anchor === "middle") {
+        if (ax + est / 2 > W - 8) ax = W - 8 - est / 2;
+        if (ax - est / 2 < 8) ax = 8 + est / 2;
+      }
+      if (ax > W - 8) { ax = W - 8; anchor = "end"; }
+      if (ax < 8) { ax = 8; anchor = "start"; }
+      var dy = an.yanchor === "bottom" ? -(linesA.length - 1) * (size + 2) - 4
+        : an.yanchor === "top" ? size : 0;
+      linesA.forEach(function (s, i) {
+        var t = el("text", { x: ax, y: ay + dy + i * (size + 2), fill: col,
+          "font-size": size + "px", "text-anchor": anchor }, svg);
+        t.textContent = s;
+      });
+    });
+
+    /* ---- legend ----
+     * Laid out in the planning pass (rows sit between the title and the
+     * plot). The swatch shows how the series is drawn: a line segment with
+     * its dash for lines, a dot for markers, a block for bars and bands, so
+     * an observed series and its dashed model line read as different. */
+    function bandFill(c) {
+      var m = /rgba\(([^)]+)\)/.exec(c || "");
+      if (!m) return c;
+      var p = m[1].split(",");
+      return "rgba(" + p.slice(0, 3).join(",") + "," +
+        Math.min(1, parseFloat(p[3]) * 3) + ")";
+    }
+    function swatch(tr, x, y) {
+      var kind = tr.type || "scatter", mode = tr.mode || "lines";
+      var c = traceColor(tr);
+      if (kind === "scatter" && (tr.fill === "tonexty" || tr.fill === "toself")) {
+        el("rect", { x: x, y: y - 9, width: 16, height: 10, rx: 2,
+                     fill: bandFill(tr.fillcolor) || c }, svg);
+        return;
+      }
+      if (kind === "scatter") {
+        var ln = tr.line || {};
+        if (mode.indexOf("lines") >= 0 && ln.width !== 0) {
+          el("line", { x1: x, y1: y - 4, x2: x + 16, y2: y - 4, stroke: c,
+            "stroke-width": 2.5, "stroke-linecap": "round",
+            "stroke-dasharray": ln.dash === "dot" ? "2,3.5"
+              : ln.dash === "dash" ? "5,3" : "none" }, svg);
+        }
+        if (mode.indexOf("markers") >= 0) {
+          var mc = tr.marker && tr.marker.color;
+          el("circle", { cx: x + 8, cy: y - 4, r: 4.5,
+            fill: typeof mc === "string" ? mc : c }, svg);
+        }
+        return;
+      }
+      el("rect", { x: x + 2.5, y: y - 9.5, width: 11, height: 11, rx: 3,
+                   fill: barColor(tr, 0) }, svg);
+    }
+    legendItems.forEach(function (it) {
+      var y = legendBase + it.row * 16;
+      swatch(it.tr, it.x, y);
+      var t = el("text", { x: it.x + 21, y: y, fill: fontCol,
+        "font-size": "12px" }, svg);
+      t.textContent = it.name;
+    });
+
+    /* ---- hover plumbing ---- */
+    function attachHover(node, tr, i, xv, yv, horiz) {
+      if (tr.hoverinfo === "skip") return;
+      node.addEventListener("pointermove", function (e) {
+        showTip(e, horiz ? hover(tr, i, xv, yv) : hover(tr, i, xv, yv));
+      });
+      node.addEventListener("pointerleave", hideTip);
+    }
+    if (measureNode && measureNode.parentNode) {
+      measureNode.parentNode.removeChild(measureNode);
+    }
+    measureNode = null;
+    postHeight();
+    if (linePts.length) {
+      svg.addEventListener("pointermove", function (e) {
+        var rect = svg.getBoundingClientRect();
+        var sx = (e.clientX - rect.left) * W / rect.width;
+        var sy = (e.clientY - rect.top) * H / rect.height;
+        var best = null, bd = 30 * 30;
+        linePts.forEach(function (p) {
+          var dd = (p.px - sx) * (p.px - sx) + (p.py - sy) * (p.py - sy);
+          if (dd < bd) { bd = dd; best = p; }
+        });
+        if (best) showTip(e, hover(best.tr, best.i, best.x, best.y));
+        else if (!e.target.closest("path,circle")) hideTip();
+      });
+      svg.addEventListener("pointerleave", hideTip);
+    }
+  }
+
+  /* ---- Plotly-compatible API ---- */
+  function resolve(gd) {
+    return typeof gd === "string" ? document.getElementById(gd) : gd;
+  }
+  var observed = new WeakSet();
+  function plot(gd, data, layout, config) {
+    gd = resolve(gd);
+    gd.data = (data || []).map(decodeTrace);
+    gd.layout = layout || {};
+    gd.config = config || {};
+    gd.classList.add("js-plotly-plot");
+    render(gd);
+    if (!observed.has(gd) && window.ResizeObserver) {
+      observed.add(gd);
+      var pending = null;
+      // Keep a strong reference on the element (an unreferenced observer
+      // can be GC'd) and debounce with setTimeout, which still fires in
+      // offscreen iframes where requestAnimationFrame stalls.
+      gd._famResizeObserver = new ResizeObserver(function () {
+        clearTimeout(pending);
+        pending = setTimeout(function () {
+          if (Math.abs((gd.clientWidth || 0) - gd._famLastW) > 1) {
+            render(gd);
+          }
+        }, 80);
+      });
+      gd._famResizeObserver.observe(gd);
+      // Fallback for environments where observer callbacks are deferred
+      // (offscreen iframes): the frame's own resize event.
+      window.addEventListener("resize", function () {
+        clearTimeout(pending);
+        pending = setTimeout(function () {
+          if (Math.abs((gd.clientWidth || 0) - gd._famLastW) > 1) {
+            render(gd);
+          }
+        }, 120);
+      });
+    }
+    gd._famLastW = gd.clientWidth || 0;
+    return Promise.resolve(gd);
+  }
+  window.Plotly = {
+    newPlot: plot,
+    react: plot,
+    relayout: function (gd, patch) {
+      gd = resolve(gd);
+      for (var k in patch) {
+        if (patch[k] === null) delete gd.layout[k];
+        else gd.layout[k] = patch[k];
+      }
+      render(gd);
+      return Promise.resolve(gd);
+    },
+    Plots: { resize: function (gd) { render(resolve(gd)); } },
+  };
+})();
+</script>                <div id="e1ddd2b1-9a4a-41d7-a3e3-9adb33bc321c" class="plotly-graph-div" style="height:100%; width:100%;"></div>            <script>                window.PLOTLYENV=window.PLOTLYENV || {};                                if (document.getElementById("e1ddd2b1-9a4a-41d7-a3e3-9adb33bc321c")) {                    Plotly.newPlot(                        "e1ddd2b1-9a4a-41d7-a3e3-9adb33bc321c",                        [{"customdata":[["2000-01","ATL",-0.571308083581],["2000-01","BOS",0.269728193265],["2000-01","CLE",-1.401849549006],["2000-01","CHI",0.554519378949],["2000-01","DAL",-2.704547426498],["2000-01","DEN",1.294793649809],["2000-01","GSW",1.423076608348],["2000-01","HOU",0.149641873011],["2000-01","LAC",-0.936010189863],["2000-01","LAL",-0.172580486916],["2000-01","MIA",-1.418806903606],["2000-01","MIL",0.513280187626],["2000-01","MIN",-0.863778536932],["2000-01","NJN",-0.564224256338],["2000-01","NYK",-0.288426205558],["2000-01","ORL",0.056692713754],["2000-01","IND",0.43593591991],["2000-01","PHI",0.700809303196],["2000-01","PHX",0.606390457114],["2000-01","POR",-0.889461629385],["2000-01","SAC",0.307986191479],["2000-01","SAS",2.660026875835],["2000-01","SEA",-1.689889250931],["2000-01","TOR",1.173530944759],["2000-01","UTA",1.173550734339],["2000-01","VAN",-0.46815263649],["2000-01","WAS",0.112701767499],["2000-01","DET",-0.13688596136],["2000-01","CHH",-0.000233011337],["2001-02","ATL",1.108609904928],["2001-02","BOS",-0.655969668664],["2001-02","CLE",0.053343066726],["2001-02","CHI",2.000948919059],["2001-02","DAL",-0.906649547088],["2001-02","DEN",-0.197998699769],["2001-02","GSW",-0.135315044735],["2001-02","HOU",-1.092812032719],["2001-02","LAC",1.361305479828],["2001-02","LAL",0.760537783494],["2001-02","MIA",-1.712297180544],["2001-02","MIL",0.239123096316],["2001-02","MIN",-0.252247149503],["2001-02","NJN",0.899828824601],["2001-02","NYK",-0.464671792592],["2001-02","ORL",0.412609359279],["2001-02","IND",0.455005005062],["2001-02","PHI",-1.601274153896],["2001-02","PHX",-0.993541200005],["2001-02","POR",1.256499836982],["2001-02","SAC",-1.384719090094],["2001-02","SAS",-0.78630581815],["2001-02","SEA",-0.392355878754],["2001-02","TOR",-1.203973357729],["2001-02","UTA",0.679756495299],["2001-02","MEM",1.530678579804],["2001-02","WAS",-0.499660832175],["2001-02","DET",0.134292533726],["2001-02","CHH",-0.690717554809],["2002-03","ATL",0.037186271115],["2002-03","BOS",0.176530958086],["2002-03","CLE",-0.547324876827],["2002-03","NOH",0.730588830023],["2002-03","CHI",-1.118322114394],["2002-03","DAL",-1.470012362379],["2002-03","DEN",-1.586307201254],["2002-03","GSW",-1.268088837015],["2002-03","HOU",-0.169640213503],["2002-03","LAC",0.560533124237],["2002-03","LAL",0.324842234234],["2002-03","MIA",-0.878411961068],["2002-03","MIL",-0.150080183233],["2002-03","MIN",-0.55767216919],["2002-03","NJN",-1.676318756784],["2002-03","NYK",-0.99239917895],["2002-03","ORL",1.006077499079],["2002-03","IND",-0.362817299382],["2002-03","PHI",-1.714762376099],["2002-03","PHX",0.491464867189],["2002-03","POR",-1.770450344857],["2002-03","SAC",0.514999466092],["2002-03","SAS",0.477965756304],["2002-03","SEA",-1.094152948996],["2002-03","TOR",-0.6149036806],["2002-03","UTA",1.796128376871],["2002-03","MEM",0.288939625817],["2002-03","WAS",0.457655936596],["2002-03","DET",0.573779733922],["2003-04","ATL",0.8159317616],["2003-04","BOS",-1.818595931532],["2003-04","CLE",-0.443139694105],["2003-04","NOH",-0.853103192784],["2003-04","CHI",1.878706853557],["2003-04","DAL",-1.551496297798],["2003-04","DEN",0.667688612112],["2003-04","GSW",-1.147229638508],["2003-04","HOU",1.490268539428],["2003-04","LAC",0.906353020236],["2003-04","LAL",0.875576243006],["2003-04","MIA",-0.706232864641],["2003-04","MIL",0.879977441794],["2003-04","MIN",-0.350618048744],["2003-04","NJN",0.383277221175],["2003-04","NYK",-1.396620498265],["2003-04","ORL",2.352388817967],["2003-04","IND",1.306065431696],["2003-04","PHI",-2.142886882242],["2003-04","PHX",0.476634219031],["2003-04","POR",-0.188318571176],["2003-04","SAC",1.899697348988],["2003-04","SAS",-1.44119166184],["2003-04","SEA",-0.85456375237],["2003-04","TOR",0.006111505619],["2003-04","UTA",1.460195637292],["2003-04","MEM",-0.460869023689],["2003-04","WAS",-1.271639471081],["2003-04","DET",-0.777076787962],["2004-05","ATL",0.691176049633],["2004-05","BOS",2.352707864719],["2004-05","CLE",-0.419713263791],["2004-05","NOH",-0.171981567273],["2004-05","CHI",-0.513622556763],["2004-05","DAL",-2.223305320841],["2004-05","DEN",0.326326910495],["2004-05","GSW",0.718033916592],["2004-05","HOU",1.095125647158],["2004-05","LAC",-2.129847396047],["2004-05","LAL",-0.523500831943],["2004-05","MIA",-0.166127344629],["2004-05","MIL",1.498285546874],["2004-05","MIN",1.762448669151],["2004-05","NJN",2.440177740572],["2004-05","NYK",0.497512048797],["2004-05","ORL",0.158965700988],["2004-05","IND",-0.935527972302],["2004-05","PHI",-0.121070247091],["2004-05","PHX",-0.591989214166],["2004-05","POR",-0.405027958094],["2004-05","SAC",0.299722699355],["2004-05","SAS",1.069976510953],["2004-05","SEA",0.485228213371],["2004-05","TOR",1.498973360016],["2004-05","UTA",0.758132358388],["2004-05","MEM",-0.347277885849],["2004-05","WAS",-0.969902862539],["2004-05","DET",0.16457167265],["2004-05","CHA",-0.443767413178],["2005-06","ATL",0.047188227264],["2005-06","BOS",-0.784566460362],["2005-06","CLE",-0.954112218589],["2005-06","NOK",-0.720706540759],["2005-06","CHI",0.918497154361],["2005-06","DAL",0.494850901405],["2005-06","DEN",-0.100483595115],["2005-06","GSW",0.42488744659],["2005-06","HOU",0.238901888869],["2005-06","LAC",-0.303012872011],["2005-06","LAL",0.240795177545],["2005-06","MIA",-0.211004779488],["2005-06","MIL",0.435547112858],["2005-06","MIN",1.597368657631],["2005-06","NJN",0.453583800929],["2005-06","NYK",-1.406652261244],["2005-06","ORL",0.271736383385],["2005-06","IND",0.333167522501],["2005-06","PHI",-1.964100594939],["2005-06","PHX",-0.247100081186],["2005-06","POR",-0.120796344756],["2005-06","SAC",0.075149665331],["2005-06","SAS",0.035789998159],["2005-06","SEA",-1.390195629561],["2005-06","TOR",0.105038957617],["2005-06","UTA",0.67476100516],["2005-06","MEM",-0.27768307091],["2005-06","WAS",-0.471780034818],["2005-06","DET",0.30760471282],["2005-06","CHA",-1.01273678925],["2006-07","ATL",0.26758583201],["2006-07","BOS",0.877780670517],["2006-07","CLE",1.197732449202],["2006-07","NOK",-0.257224408079],["2006-07","CHI",0.18006415462],["2006-07","DAL",0.350767263569],["2006-07","DEN",0.26880678442],["2006-07","GSW",0.495411333813],["2006-07","HOU",1.129887647544],["2006-07","LAC",0.630575284052],["2006-07","LAL",-2.126819829355],["2006-07","MIA",0.196473928074],["2006-07","MIL",0.344467061751],["2006-07","MIN",0.77492539772],["2006-07","NJN",-0.429134989898],["2006-07","NYK",-1.209584789442],["2006-07","ORL",-1.822373609106],["2006-07","IND",0.584875883588],["2006-07","PHI",0.172594324307],["2006-07","PHX",0.350739460867],["2006-07","POR",0.079396068526],["2006-07","SAC",0.347937557404],["2006-07","SAS",-1.297015818573],["2006-07","SEA",-1.943184399543],["2006-07","TOR",-0.19329969494],["2006-07","UTA",0.053463303515],["2006-07","MEM",1.000493185454],["2006-07","WAS",-1.223965797498],["2006-07","DET",-1.08391798643],["2006-07","CHA",0.681774215814],["2007-08","ATL",1.198689881068],["2007-08","BOS",-0.851984535587],["2007-08","CLE",2.307667360129],["2007-08","NOH",-0.126483742437],["2007-08","CHI",1.574293354311],["2007-08","DAL",0.554612191393],["2007-08","DEN",2.254470842744],["2007-08","GSW",0.229706390276],["2007-08","HOU",1.192549661855],["2007-08","LAC",0.252241867889],["2007-08","LAL",1.043986262578],["2007-08","MIA",0.638368178051],["2007-08","MIL",1.063425366543],["2007-08","MIN",0.276430476488],["2007-08","NJN",-1.538080873854],["2007-08","NYK",1.845900447946],["2007-08","ORL",0.002230947493],["2007-08","IND",0.142478469625],["2007-08","PHI",1.391458211451],["2007-08","PHX",-1.07309217107],["2007-08","POR",-1.244782410652],["2007-08","SAC",-0.474469247037],["2007-08","SAS",-1.301613928802],["2007-08","SEA",-0.334717882284],["2007-08","TOR",0.700076339133],["2007-08","UTA",-0.60518691535],["2007-08","MEM",0.174694495511],["2007-08","WAS",-0.801242301771],["2007-08","DET",2.061691982413],["2007-08","CHA",-0.052577310344],["2008-09","ATL",2.022380748685],["2008-09","BOS",0.444965010737],["2008-09","CLE",-1.144375076202],["2008-09","NOH",-0.018693501084],["2008-09","CHI",0.496644453335],["2008-09","DAL",0.935681049877],["2008-09","DEN",0.44849617687],["2008-09","GSW",-1.633452404645],["2008-09","HOU",0.26253805343],["2008-09","LAC",-1.279295026735],["2008-09","LAL",-0.287893769788],["2008-09","MIA",-0.891679524085],["2008-09","MIL",1.364931522223],["2008-09","MIN",0.549633117364],["2008-09","NJN",-0.048738982652],["2008-09","NYK",-0.865432831907],["2008-09","ORL",-1.704181392418],["2008-09","IND",-1.880816068873],["2008-09","PHI",0.839731391452],["2008-09","PHX",-1.881318760513],["2008-09","POR",1.583004268458],["2008-09","SAC",1.942025109112],["2008-09","SAS",0.698174452881],["2008-09","OKC",-0.890324981052],["2008-09","TOR",-0.511219603007],["2008-09","UTA",1.78490979777],["2008-09","MEM",-1.54731097855],["2008-09","WAS",-0.292454246591],["2008-09","DET",0.391795247365],["2008-09","CHA",-0.960497512087],["2009-10","ATL",-0.447256671041],["2009-10","BOS",-0.459344145172],["2009-10","CLE",-0.207324723744],["2009-10","NOH",1.587553131015],["2009-10","CHI",0.634146155476],["2009-10","DAL",-0.406036568033],["2009-10","DEN",-0.258029197455],["2009-10","GSW",-0.239128037577],["2009-10","HOU",-1.05692508461],["2009-10","LAC",-0.210392997222],["2009-10","LAL",1.106038616354],["2009-10","MIA",0.454146103321],["2009-10","MIL",-1.004382913019],["2009-10","MIN",1.227984232753],["2009-10","NJN",-1.103892371423],["2009-10","NYK",0.630528804703],["2009-10","ORL",-0.236413134892],["2009-10","IND",0.720862011805],["2009-10","PHI",0.432688239215],["2009-10","PHX",-2.96727358979],["2009-10","POR",-0.51664038362],["2009-10","SAC",-0.794337377196],["2009-10","SAS",1.084330114316],["2009-10","OKC",-0.424749820951],["2009-10","TOR",0.13853696617],["2009-10","UTA",0.671600017323],["2009-10","MEM",1.249281729621],["2009-10","WAS",0.346127328972],["2009-10","DET",-1.579617701568],["2009-10","CHA",-0.782638224239],["2010-11","ATL",-0.299050852309],["2010-11","BOS",0.226649741925],["2010-11","CLE",0.729499457426],["2010-11","NOH",-0.607927568268],["2010-11","CHI",1.397498634248],["2010-11","DAL",-0.421378441835],["2010-11","DEN",-0.084928738813],["2010-11","GSW",-0.237178915235],["2010-11","HOU",-1.16462192289],["2010-11","LAC",-1.384486439294],["2010-11","LAL",1.008773126486],["2010-11","MIA",0.443208168263],["2010-11","MIL",0.06693661024],["2010-11","MIN",-1.07607567394],["2010-11","NJN",1.323623040741],["2010-11","NYK",0.253868679607],["2010-11","ORL",-1.468746592967],["2010-11","IND",-0.798369624293],["2010-11","PHI",-1.359938991456],["2010-11","PHX",-0.342930461184],["2010-11","POR",-0.091735089909],["2010-11","SAC",-0.992146996877],["2010-11","SAS",1.131911112798],["2010-11","OKC",0.872134347942],["2010-11","TOR",-0.636346092303],["2010-11","UTA",1.288803776948],["2010-11","MEM",-1.286434557783],["2010-11","WAS",-0.100068928463],["2010-11","DET",0.285089895859],["2010-11","CHA",-0.302729290331],["2011-12","ATL",0.66275557236],["2011-12","BOS",1.378139064599],["2011-12","CLE",-0.520274650455],["2011-12","NOH",-0.727194540175],["2011-12","CHI",-0.576847298697],["2011-12","DAL",0.442662215889],["2011-12","DEN",0.468851240362],["2011-12","GSW",0.946969754503],["2011-12","HOU",-1.697105302517],["2011-12","LAC",1.191080574689],["2011-12","LAL",-1.031513873955],["2011-12","MIA",-1.196216664726],["2011-12","MIL",0.365516240628],["2011-12","MIN",0.511856199061],["2011-12","NJN",-1.267502153112],["2011-12","NYK",1.43038583826],["2011-12","ORL",-0.240138836739],["2011-12","IND",-1.112135049922],["2011-12","PHI",0.49278409],["2011-12","PHX",0.642748280381],["2011-12","POR",0.18327816868],["2011-12","SAC",0.272140311359],["2011-12","SAS",-0.00051351525],["2011-12","OKC",-0.669682772713],["2011-12","TOR",-0.227118543109],["2011-12","UTA",-0.925213300463],["2011-12","MEM",2.059168307762],["2011-12","WAS",-0.594544634977],["2011-12","DET",0.566810407205],["2011-12","CHA",0.829798795101],["2012-13","ATL",-1.052223124633],["2012-13","BOS",1.366372087012],["2012-13","CLE",-0.399448503872],["2012-13","NOH",-0.059053667011],["2012-13","CHI",-1.290918463436],["2012-13","DAL",0.452395814495],["2012-13","DEN",-0.985355404887],["2012-13","GSW",-1.089735510012],["2012-13","HOU",0.007626952964],["2012-13","LAC",-0.965991766203],["2012-13","LAL",-0.864922129674],["2012-13","MIA",0.439683205564],["2012-13","MIL",-0.350493253309],["2012-13","MIN",-0.979978029669],["2012-13","BKN",-0.446134617377],["2012-13","NYK",0.100586080466],["2012-13","ORL",-0.894565690499],["2012-13","IND",1.082236201964],["2012-13","PHI",-0.324608189226],["2012-13","PHX",0.141606145164],["2012-13","POR",0.233869399576],["2012-13","SAC",-0.98834885043],["2012-13","SAS",-0.240076481063],["2012-13","OKC",0.072156522131],["2012-13","TOR",-0.597242246262],["2012-13","UTA",0.165989066431],["2012-13","MEM",0.362105860753],["2012-13","WAS",-1.655709991587],["2012-13","DET",0.296608713476],["2012-13","CHA",0.256288425736],["2013-14","ATL",-0.012501192286],["2013-14","BOS",1.225363168592],["2013-14","CLE",0.427462565191],["2013-14","NOP",-0.789875326867],["2013-14","CHI",-0.36561460751],["2013-14","DAL",-0.054719006745],["2013-14","DEN",-1.024312673404],["2013-14","GSW",-0.262249774054],["2013-14","HOU",1.283202001277],["2013-14","LAC",0.801924777737],["2013-14","LAL",-0.55964667681],["2013-14","MIA",-0.672653952597],["2013-14","MIL",0.590572209522],["2013-14","MIN",0.89637768416],["2013-14","BKN",-0.283344034403],["2013-14","NYK",-0.428146239168],["2013-14","ORL",0.584230455691],["2013-14","IND",-0.755314808578],["2013-14","PHI",0.697162164858],["2013-14","PHX",-0.376959476963],["2013-14","POR",0.001682117182],["2013-14","SAC",0.523101357473],["2013-14","SAS",-0.608754787924],["2013-14","OKC",-1.179939588338],["2013-14","TOR",-1.224609754365],["2013-14","UTA",0.374345136001],["2013-14","MEM",0.230570414938],["2013-14","WAS",-0.058402385351],["2013-14","DET",-0.861196762446],["2013-14","CHA",-1.940226487068],["2014-15","ATL",-1.209145373627],["2014-15","BOS",-1.111660270349],["2014-15","CLE",-0.046719605234],["2014-15","NOP",-1.556889300347],["2014-15","CHI",-1.205073472453],["2014-15","DAL",0.770649988605],["2014-15","DEN",1.247785363696],["2014-15","GSW",-0.414162105768],["2014-15","HOU",1.000499132239],["2014-15","LAC",0.965614066957],["2014-15","LAL",-1.069644647275],["2014-15","MIA",-0.930126771695],["2014-15","MIL",0.491954837118],["2014-15","MIN",-1.852395489485],["2014-15","BKN",-0.533912854405],["2014-15","NYK",-0.179706068125],["2014-15","ORL",-0.628302139539],["2014-15","IND",1.274223852204],["2014-15","PHI",-0.104681510779],["2014-15","PHX",-0.085982205171],["2014-15","POR",-0.270194306937],["2014-15","SAC",0.010516727452],["2014-15","SAS",0.794590330134],["2014-15","OKC",-0.567520855454],["2014-15","TOR",0.880541252692],["2014-15","UTA",-0.088461772996],["2014-15","MEM",0.418100950826],["2014-15","WAS",0.097563508848],["2014-15","DET",0.048880436296],["2014-15","CHA",-0.262157552188],["2015-16","ATL",-0.751978110681],["2015-16","BOS",-0.054119104274],["2015-16","CLE",0.437185277518],["2015-16","NOP",-0.984085291548],["2015-16","CHI",1.052380215088],["2015-16","DAL",0.390756104574],["2015-16","DEN",1.183988206929],["2015-16","GSW",-0.287708808133],["2015-16","HOU",-1.247948365282],["2015-16","LAC",-0.378963564822],["2015-16","LAL",0.136525439609],["2015-16","MIA",-1.116915591399],["2015-16","MIL",-3.005197410514],["2015-16","MIN",0.384813841666],["2015-16","BKN",-1.247401508358],["2015-16","NYK",1.574824765734],["2015-16","ORL",0.310936928027],["2015-16","IND",0.409547625048],["2015-16","PHI",1.91037543797],["2015-16","PHX",-0.334155703438],["2015-16","POR",-0.742570412394],["2015-16","SAC",-0.096512885121],["2015-16","SAS",-0.550327842962],["2015-16","OKC",2.365905602302],["2015-16","TOR",0.020659450574],["2015-16","UTA",0.155606699235],["2015-16","MEM",-0.413581229583],["2015-16","WAS",-0.564608261212],["2015-16","DET",0.520182442892],["2015-16","CHA",-0.9807512832],["2016-17","ATL",1.582645245102],["2016-17","BOS",-0.455186488124],["2016-17","CLE",-0.557169586963],["2016-17","NOP",1.159004569958],["2016-17","CHI",-0.205811757806],["2016-17","DAL",1.068452680149],["2016-17","DEN",-1.018200529965],["2016-17","GSW",0.136467119854],["2016-17","HOU",-1.536691853186],["2016-17","LAC",-0.906054298463],["2016-17","LAL",-0.449737502517],["2016-17","MIA",0.426095014749],["2016-17","MIL",-0.442081926954],["2016-17","MIN",0.543496333771],["2016-17","BKN",0.416793942926],["2016-17","NYK",-0.332703947768],["2016-17","ORL",0.148194199376],["2016-17","IND",1.559494997565],["2016-17","PHI",0.440840870485],["2016-17","PHX",0.998002155872],["2016-17","POR",0.351967879346],["2016-17","SAC",0.904105873214],["2016-17","SAS",0.772113319766],["2016-17","OKC",-0.386526966472],["2016-17","TOR",-0.520715340027],["2016-17","UTA",-0.508261326409],["2016-17","MEM",-0.688788997021],["2016-17","WAS",1.846307259549],["2016-17","DET",-0.643304962775],["2016-17","CHA",0.477270950919],["2017-18","ATL",0.499921732717],["2017-18","BOS",-1.406649218551],["2017-18","CLE",-1.142065425938],["2017-18","NOP",0.106294343112],["2017-18","CHI",-0.7320502548],["2017-18","DAL",0.653742811071],["2017-18","DEN",0.349856396491],["2017-18","GSW",0.134111676385],["2017-18","HOU",1.287057826981],["2017-18","LAC",-0.633321486817],["2017-18","LAL",-0.35537175326],["2017-18","MIA",0.897603841706],["2017-18","MIL",0.189069421011],["2017-18","MIN",-0.526051922251],["2017-18","BKN",2.388218281824],["2017-18","NYK",-0.027607901326],["2017-18","ORL",1.094512595194],["2017-18","IND",1.694202204892],["2017-18","PHI",-1.237728262309],["2017-18","PHX",0.450172014691],["2017-18","POR",-0.270781894009],["2017-18","SAC",-1.432250917302],["2017-18","SAS",-0.122494448313],["2017-18","OKC",0.354436795149],["2017-18","TOR",-0.53573846795],["2017-18","UTA",-1.320249862843],["2017-18","MEM",-0.306548053594],["2017-18","WAS",0.921701446737],["2017-18","DET",2.243163013648],["2017-18","CHA",-2.68092010066],["2018-19","ATL",-0.609968334658],["2018-19","BOS",-0.358934459521],["2018-19","CLE",1.897972488325],["2018-19","NOP",-1.282146191473],["2018-19","CHI",-2.666220207681],["2018-19","DAL",-3.788905855913],["2018-19","DEN",-2.317496818792],["2018-19","GSW",-0.534938382372],["2018-19","HOU",-1.132710433523],["2018-19","LAC",-0.039233592587],["2018-19","LAL",-1.577633076399],["2018-19","MIA",-0.376473592929],["2018-19","MIL",-0.627476540438],["2018-19","MIN",-0.219570907858],["2018-19","BKN",-0.434603704392],["2018-19","NYK",-0.532886742862],["2018-19","ORL",-1.196419018341],["2018-19","IND",-1.081699296777],["2018-19","PHI",0.909942953085],["2018-19","PHX",0.613942143064],["2018-19","POR",-0.606051506504],["2018-19","SAC",0.12548443062],["2018-19","SAS",0.743330387142],["2018-19","OKC",-1.045074054137],["2018-19","TOR",-0.006480957943],["2018-19","UTA",0.635900712738],["2018-19","MEM",0.086164753612],["2018-19","WAS",2.970707248536],["2018-19","DET",-1.840521779133],["2018-19","CHA",0.811904023935],["2019-20","ATL",-3.562515382597],["2019-20","BOS",-0.091541368184],["2019-20","CLE",-1.016682825336],["2019-20","NOP",0.181957244323],["2019-20","CHI",-1.176652775787],["2019-20","DAL",2.902169319337],["2019-20","DEN",-0.957305903204],["2019-20","GSW",-0.166862455186],["2019-20","HOU",-2.198935821216],["2019-20","LAC",0.142963606053],["2019-20","LAL",0.297495318725],["2019-20","MIA",1.470694007424],["2019-20","MIL",-0.733883329948],["2019-20","MIN",-0.035302171232],["2019-20","BKN",0.265234651757],["2019-20","NYK",-0.262315072458],["2019-20","ORL",-0.747948484962],["2019-20","IND",-0.977460464659],["2019-20","PHI",1.753366020567],["2019-20","PHX",0.46983670508],["2019-20","POR",-1.290657032708],["2019-20","SAC",0.584315449906],["2019-20","SAS",0.111156471551],["2019-20","OKC",0.535947249773],["2019-20","TOR",-0.323618339339],["2019-20","UTA",-0.664497094389],["2019-20","MEM",0.422363521778],["2019-20","WAS",-0.107567976918],["2019-20","DET",0.507473894568],["2019-20","CHA",1.135564093138],["2020-21","ATL",0.302050795075],["2020-21","BOS",-1.013652297385],["2020-21","CLE",1.570717892056],["2020-21","NOP",0.211193302866],["2020-21","CHI",-1.112850314915],["2020-21","DAL",-0.18968931684],["2020-21","DEN",-1.021497107824],["2020-21","GSW",0.063523502249],["2020-21","HOU",1.245485245436],["2020-21","LAC",0.710108578908],["2020-21","LAL",-1.46554782582],["2020-21","MIA",-0.028582643146],["2020-21","MIL",-1.541756525414],["2020-21","MIN",0.063630298902],["2020-21","BKN",-1.462196496535],["2020-21","NYK",-0.211716034211],["2020-21","ORL",-0.397595200868],["2020-21","IND",0.433209004227],["2020-21","PHI",-1.028853482698],["2020-21","PHX",1.646901117441],["2020-21","POR",-0.494462217063],["2020-21","SAC",-1.060517257232],["2020-21","SAS",-0.110116983235],["2020-21","OKC",-0.807323683219],["2020-21","TOR",-3.34479384642],["2020-21","UTA",1.094466746558],["2020-21","MEM",0.557226022017],["2020-21","WAS",0.758733998132],["2020-21","DET",0.702333681673],["2020-21","CHA",-2.061323356174],["2021-22","ATL",-0.360752169255],["2021-22","BOS",1.807686693305],["2021-22","CLE",-0.241556921939],["2021-22","NOP",0.276757839035],["2021-22","CHI",1.50369604904],["2021-22","DAL",-0.214415586967],["2021-22","DEN",-0.807891190459],["2021-22","GSW",-0.380597822967],["2021-22","HOU",-0.101530200961],["2021-22","LAC",0.819737968263],["2021-22","LAL",-1.845184450201],["2021-22","MIA",-0.080092100001],["2021-22","MIL",1.107931348363],["2021-22","MIN",-1.129827001091],["2021-22","BKN",0.260734594291],["2021-22","NYK",0.328346586976],["2021-22","ORL",1.147050421521],["2021-22","IND",-1.509819527178],["2021-22","PHI",-0.585880813931],["2021-22","PHX",-0.107082020425],["2021-22","POR",-2.190993410852],["2021-22","SAC",2.589472206744],["2021-22","SAS",0.730390856938],["2021-22","OKC",1.224543357087],["2021-22","TOR",-0.362094592621],["2021-22","UTA",-0.769224017627],["2021-22","MEM",-1.072328606908],["2021-22","WAS",-0.139509229806],["2021-22","DET",1.089725194802],["2021-22","CHA",-0.836558234095],["2022-23","ATL",-3.009099038832],["2022-23","BOS",-0.558292718764],["2022-23","CLE",-0.360444671866],["2022-23","NOP",-0.667037379176],["2022-23","CHI",0.061913289153],["2022-23","DAL",-2.076536092875],["2022-23","DEN",0.575951438199],["2022-23","GSW",0.404565576715],["2022-23","HOU",-0.526972286856],["2022-23","LAC",0.959275296014],["2022-23","LAL",-0.775369144129],["2022-23","MIA",1.133271781815],["2022-23","MIL",0.091910905934],["2022-23","MIN",0.11508263097],["2022-23","BKN",-1.168346578463],["2022-23","NYK",-0.377685886782],["2022-23","ORL",-0.607885335626],["2022-23","IND",-0.584423093883],["2022-23","PHI",0.188424537474],["2022-23","PHX",-1.222480904935],["2022-23","POR",0.722769024589],["2022-23","SAC",-0.530254542976],["2022-23","SAS",-1.12113696663],["2022-23","OKC",1.340141143565],["2022-23","TOR",2.421199408166],["2022-23","UTA",1.000771049599],["2022-23","MEM",-0.139856332095],["2022-23","WAS",-0.559756177331],["2022-23","DET",-0.62004655775],["2022-23","CHA",-1.666137784588],["2023-24","ATL",-0.319624025886],["2023-24","BOS",0.355173310574],["2023-24","CLE",-2.284826249692],["2023-24","NOP",1.45352813992],["2023-24","CHI",-0.379555681296],["2023-24","DAL",1.235951784393],["2023-24","DEN",-1.799406422293],["2023-24","GSW",-0.257824103994],["2023-24","HOU",0.780159439512],["2023-24","LAC",0.792940185114],["2023-24","LAL",-1.446996296124],["2023-24","MIA",-1.153687079601],["2023-24","MIL",-0.374995504246],["2023-24","MIN",-1.83405353164],["2023-24","BKN",-0.32596070671],["2023-24","NYK",-0.158226422692],["2023-24","ORL",-0.049880526018],["2023-24","IND",0.705227215402],["2023-24","PHI",0.312525522576],["2023-24","PHX",0.964151928934],["2023-24","POR",-0.74283094771],["2023-24","SAC",0.910878803648],["2023-24","SAS",0.010483316182],["2023-24","OKC",-0.837895514528],["2023-24","TOR",-0.994203486853],["2023-24","UTA",-1.811124028406],["2023-24","MEM",-1.048193825242],["2023-24","WAS",-2.151486577605],["2023-24","DET",-1.295365509629],["2023-24","CHA",0.854036990926],["2024-25","ATL",1.186630742356],["2024-25","BOS",-0.645620002554],["2024-25","CLE",-0.085351369188],["2024-25","NOP",2.079544055353],["2024-25","CHI",-0.110659329978],["2024-25","DAL",-0.064975932365],["2024-25","DEN",0.136503477766],["2024-25","GSW",-0.555524132922],["2024-25","HOU",-0.164188007002],["2024-25","LAC",0.514715925619],["2024-25","LAL",-0.023923513454],["2024-25","MIA",1.183831423969],["2024-25","MIL",0.059264394088],["2024-25","MIN",-0.97616779002],["2024-25","BKN",-1.014115790299],["2024-25","NYK",-0.12527223564],["2024-25","ORL",-0.414436545854],["2024-25","IND",1.736148257001],["2024-25","PHI",-1.120318667881],["2024-25","PHX",0.221170365102],["2024-25","POR",2.021180374517],["2024-25","SAC",-0.918889092214],["2024-25","SAS",-0.180811088339],["2024-25","OKC",1.643473799819],["2024-25","TOR",-0.249853733099],["2024-25","UTA",-1.864404816603],["2024-25","MEM",-1.033524042849],["2024-25","WAS",1.007072971259],["2024-25","DET",0.417342328888],["2024-25","CHA",0.694787500486],["2025-26","ATL",-0.728115957634],["2025-26","BOS",1.192658141367],["2025-26","CLE",0.902623496016],["2025-26","NOP",2.094096258366],["2025-26","CHI",-0.13347907688],["2025-26","DAL",-0.614078119817],["2025-26","DEN",2.016108492376],["2025-26","GSW",1.128410269876],["2025-26","HOU",-0.28214795947],["2025-26","LAC",0.553000240686],["2025-26","LAL",-0.774862281719],["2025-26","MIA",1.880961466289],["2025-26","MIL",-0.316666630154],["2025-26","MIN",1.301954332502],["2025-26","BKN",0.462262995862],["2025-26","NYK",0.260054241331],["2025-26","ORL",-2.074977123327],["2025-26","IND",-0.036854006021],["2025-26","PHI",1.809829130255],["2025-26","PHX",-0.965852435956],["2025-26","POR",-0.409794031899],["2025-26","SAC",-0.071237296203],["2025-26","SAS",0.641048112066],["2025-26","OKC",-0.634756320245],["2025-26","TOR",0.44040503838],["2025-26","UTA",-0.379413408187],["2025-26","MEM",0.728858564559],["2025-26","WAS",0.052754687514],["2025-26","DET",0.278928961899],["2025-26","CHA",-0.227189602734]],"hovertemplate":"NBA %{customdata[0]} %{customdata[1]}: stops %{x:.1f}%, kills %{y:.2f} per 100 (z %{customdata[2]:.2f})\u003cextra\u003e\u003c\u002fextra\u003e","marker":{"color":"#2a78d6","opacity":0.6,"size":7},"mode":"markers","name":"NBA","x":[49.8159347883,49.8367506856,49.364911352200004,47.4196163199,50.051975051999996,48.8457023608,48.6763013173,49.3996798292,49.1448423303,49.2635455024,52.3565998618,50.209259743699995,49.149861605400005,48.8645365725,53.0113794061,49.663995864600004,50.701402805600004,52.818676217000004,52.1987287586,50.931846007299995,52.155771905399995,52.7150537634,49.5302368665,50.263782643099994,50.4249291785,49.0201236354,48.1831300013,50.6863243518,52.1090811392,49.4869771113,51.882845188299996,48.170894526000005,48.0267558528,48.5547634478,47.8990468519,47.754318618,47.617107943,49.1329479769,50.823126563900004,51.087854585500004,48.880597014900005,49.7929191717,52.0225899659,49.1575684054,48.9565780946,50.0065299726,52.026108240400006,49.9604743083,50.5072365751,51.432919097100005,52.057364964499996,49.7559652928,50.4093886463,50.1796885399,49.1920529801,49.2751641138,50.60094530719999,50.3116531165,49.1648033671,51.4236295902,48.638281549700004,50.6526712421,48.8315356959,50.898832174300004,50.859885348599995,47.959053103,50.77357729050001,49.186184994,49.6181195681,50.8106622699,48.053673442299996,50.2898550725,52.687165775400004,48.473181094,49.578086459800005,51.3218466395,51.1350216507,50.911974623300004,51.06210255719999,52.0096056623,51.996248660199996,50.5753424658,48.256361922699995,50.7833603458,48.6468988735,50.62200956939999,51.0108003323,49.3810903345,50.8406099309,49.7013142174,50.8295625943,50.0523286238,49.084534476,50.1104900559,50.020153164,52.2633744856,47.8940397351,51.107906123,51.395572666,49.5520421607,51.8180580144,53.119501962399994,50.454667023300004,47.238449283099996,52.7021423635,51.272229822199996,49.816417519,49.840344301,49.8764790014,54.076493807000006,48.6058981233,50.675675675700006,50.1460564752,50.7439104674,49.9736356446,53.84509561150001,46.8918386122,48.8267148014,48.862871753499995,48.6642005754,51.3803480309,50.3851677765,50.1102321359,48.665721284,51.112920738300005,49.378591474,47.482396705199996,50.351039872799994,47.7596064353,49.1433233614,50.5598273304,47.7580260016,48.290871847400005,49.450700357,50.9937966831,49.1817724068,48.5393562348,48.5788113695,51.7368205966,47.833860541899995,47.7314211213,47.451837682699995,50.4733159555,48.8399222294,51.4175612442,48.276312353099996,46.4614154338,48.448749836400005,49.4277635654,49.2598125764,50.50636198390001,49.5059017293,49.9615483209,49.0592967432,50.775779211899994,50.2239199157,49.2501658925,49.6881220969,48.4844473858,49.528624129,50.8024275118,47.4464143953,48.2998770995,50.291367394,48.5317047817,49.636318033600006,46.682365978700005,49.8230900275,51.2409159468,45.6195737964,46.275335614599996,48.815555251300005,51.07752588859999,48.7367456473,49.9582056283,48.5231523281,48.0717728977,48.3471618596,50.8065591254,49.7319034853,52.2099805574,50.061132998199994,49.6127904072,49.3493739259,51.768789213699996,49.323509712,47.980510321800004,49.9043715847,46.9687049889,48.8552631579,49.5849255501,48.7766168496,49.8035496545,49.184854062599996,49.1816367265,49.3549203137,47.6462585034,48.7751977545,51.488423373799996,47.3691151259,49.973842532,48.92998679,47.1220260936,47.9469687218,49.896423146000004,48.2021886399,48.288169200300004,52.75991425510001,49.3358379176,50.3442689348,49.4673941283,49.1781191054,49.7569275644,47.9450374187,51.1496571198,47.8558274138,49.9047860861,47.709616930100005,46.8980992608,47.100873709300004,48.149611484299996,47.1904197921,49.836793315099996,49.0303331676,50.248422183399995,48.2568347128,48.7938596491,48.1069327194,51.021527492100006,48.3352179922,49.979900844199996,49.0285565263,47.4707676665,48.9930182599,50.49380998750001,47.7670926097,49.2856170908,51.345922057100005,51.5868673051,49.5353030934,48.0916030534,48.9341983318,49.8001289491,46.405388854899996,50.1343724805,46.8185388845,50.809560524300004,49.483983380199994,49.1264667536,47.0502837535,47.8021239414,47.3657865098,51.1158061534,48.0446227125,49.6762881036,47.2950715824,49.0114174325,45.914844648999996,50.1781309948,48.1328869431,48.8057742782,48.9455298227,48.1406900255,47.0219017094,48.5449002217,49.692496925,48.7456164014,50.0266098989,50.465901418,47.6614699332,50.3373118838,49.7322711245,48.7422997947,47.0588235294,48.394554328299996,47.6341109793,50.744903293300005,50.6619832478,50.5829948906,47.5811544777,46.981731533,47.317073170700006,50.851743412299996,48.533299760800006,47.9020516214,47.6397040061,48.7363623809,47.847320395800004,49.5420151334,50.2212389381,46.9736498826,49.987012987,48.1275826446,47.9125248509,47.5582685905,51.572158022,48.948948948900004,51.6464237517,47.723704866599995,50.6507740786,51.8379393614,50.15368167849999,49.0263899564,47.836078131,47.8199538343,48.3427223896,51.0479241757,50.8901084192,51.0113268608,47.803650094400005,47.4979930425,47.2278738555,51.2817089453,49.1275340005,49.8817345598,48.027487910400005,49.4221243808,47.7440734132,49.9605885444,48.8255033557,46.3338125735,48.0159256802,50.4552051722,47.8210566911,47.0947597068,49.2265943012,51.78954313050001,52.7275769746,48.2837904418,50.451832907100005,52.647606158,51.7579721995,50.6919039287,48.649088541699996,49.6340868434,49.4235334012,50.873434409999994,52.875451856699996,50.27419354840001,49.372586872599996,48.3870967742,51.9779507134,50.5410889415,51.0423560556,52.608622714300004,49.582856208100004,49.5211360634,48.1782020684,51.1287964918,50.81491044050001,49.9494609164,49.5208705538,51.679629323200004,49.6891361257,49.2250673854,47.7091633466,51.2375909993,50.916633212899995,48.3099532398,48.674899403400005,50.6930149581,50.0387797311,50.624275968599996,50.408189711,50.5628037861,51.210787011600004,49.9411841589,51.4219934995,50.174486235,50.444238164699996,49.5517859606,50.6384731567,48.5519818497,52.5844245348,50.1622498648,48.9841394678,48.1074481074,47.856769471999996,51.8629105543,52.191547821499995,48.586049017,49.6576721708,52.325581395300006,51.499469214399994,49.1344333243,48.1560949443,50.1792573624,48.8193085453,50.369985719800006,48.1452352864,52.694931122099995,49.535483871000004,48.6285217823,51.496855345899995,50.2954859801,50.5536464299,48.0054341114,50.8227176221,48.2006829525,50.4223602484,49.742506272300005,49.2031605732,49.7878359264,53.07844429800001,48.5133977732,49.345200254299996,49.1378209222,49.326318490999995,51.5054452274,51.270325203300004,50.1311991603,47.6449515722,51.0747600379,50.7395498392,48.5373364126,51.533420707699996,52.388989872799996,50.6322711179,50.1248849744,49.2703634916,50.8575883576,50.7916402787,48.7731219328,52.09417596030001,51.0649023314,50.57441590290001,48.1528989225,50.073775989299996,52.08466966,47.951714395799996,50.175165434,48.8862370724,49.90268587,51.21855858199999,50.793247874100004,50.2698631856,50.9788768676,49.423247559900005,51.675689610700005,50.5384517927,49.164272656,50.6087662338,52.266456444599996,51.6466485858,50.1829108963,51.694473409800004,52.465186300300005,51.2719189923,50.9237574811,49.3403693931,49.9684462956,50.4010184596,49.6705524582,51.452887538000006,49.8383888613,51.044700519200006,47.8692278336,51.24384555580001,49.8007455971,49.0876837304,49.1523263225,49.5713172253,50.2327922486,51.8207983982,48.4569437531,49.4429314187,49.5194739504,50.1882667314,53.4089427715,50.6955758867,51.0048601077,51.2881806109,50.3575607853,50.83632759259999,50.299553856,51.7035341978,52.0094857713,49.6777454821,49.577819785799996,51.1728395062,50.7658922645,50.2370916754,48.0564496162,51.8518518519,49.6580361505,50.03177023760001,48.1926219361,50.083322650899994,49.7873985311,48.6039959016,48.8674698795,48.5732323232,49.0366452588,50.5362776025,49.1611152233,48.3280833535,48.5399172829,49.418530351399994,51.8284016023,49.987512487500005,50.4567091213,51.340178690500004,50.5703422053,49.4129402948,50.788360466600004,51.166942991999996,50.068741407299996,52.033036848799995,49.251683711599995,50.9337426452,50.3096358682,50.0701620105,49.3089894764,50.8988057825,51.28205128210001,49.7152760584,50.466475929800005,51.10968569599999,49.5777891505,49.4096737337,48.3577564426,49.7904761905,49.2360146483,51.095078588,51.7157162047,48.1909547739,50.738101298000004,49.9021526419,51.7794290184,51.285330604900004,50.5461638492,52.3062851169,49.3233664132,50.2228447727,51.6829393628,50.561089396,47.9079008883,51.190040278299996,47.0165257979,48.9820359281,48.6817903127,49.6604519076,50.3504380476,50.493025493,48.9988666415,48.6273573645,50.3616743745,51.245019920299995,52.734046388699994,49.234598631,49.4916875972,48.5654732712,50.68579338119999,51.947565543100005,49.4809688581,46.995656370700004,49.381809279,49.5741873576,49.7405485545,51.1237284126,51.1365017625,51.1687363039,50.6918238994,48.408630349300005,49.6207332491,49.2959486166,47.5738088278,51.7246175243,47.9428660146,49.063670412,49.9460625674,49.7529710242,49.8581962564,49.6262395118,50.060362172999994,51.2713630679,51.82696346070001,51.18928927500001,54.6309601568,48.9068583408,50.3813674748,49.49463536,50.9615384615,51.079035874400006,49.915635545600004,49.6956580549,48.595241295899996,49.5535714286,49.2969511346,50.890186583100004,53.2167832168,50.064350064399996,50.579613590899996,47.6471395253,48.5714285714,49.2398783805,49.1751542103,49.5344243792,48.826493880499996,49.8270374983,49.3133408072,49.2824339839,49.964453291599995,50.2588555858,48.6586875774,50.0215672178,51.349451785199996,51.242994683099994,50.9814612868,48.4421973217,49.1518353726,51.24241548689999,49.6269182036,48.904612872499996,51.5172900494,49.5459704881,47.9630943932,47.0121186795,49.2967853042,49.0708878183,50.218156228,50.9553245294,50.44186688759999,48.8142819078,48.743718593000004,50.1553672316,48.9457267623,51.9819367787,50.9644670051,49.8186820058,48.6254509267,50.269576380000004,49.3005671078,52.0977699383,47.2861538462,50.4221802142,48.5956416465,51.875792142,50.7449926722,49.6692797648,49.4017515727,50.521230612800004,49.686770667000005,47.4792518271,49.5374477253,51.3566605279,47.8071268378,48.085158448600005,49.1591518401,50.31415547619999,50.6263444262,50.4408060453,50.743902438999996,48.5996499125,48.2853912825,49.3765887907,47.521058965099996,49.732952428299996,49.9609781478,49.404980983899996,50.3129986498,47.001377237999996,48.1154372434,48.60795794,47.253694581299996,48.2233502538,48.7299305056,49.6071971617,49.696519261700004,48.4563434636,48.293472845000004,48.6937049017,49.0645002462,46.6837983358,48.5484479075,48.8949590266,46.474517565599996,47.4933397917,45.6435998566,48.7702459508,48.5886337975,47.189922480599996,50.2418964683,48.129799356,46.043430254,48.0303577882,47.165010903799995,50.343621142100005,49.423125156800005,50.101010101,48.6086738531,48.304150851,48.7687839374,48.8354988968,48.9033206715,48.3911513323,49.2163396273,49.9809765377,48.008283591200005,50.764602657299996,48.0552070263,49.474224160000006,49.8804580345,45.6626506024,48.7131434283,48.9793393542,46.8286604361,48.4811216333,47.5824835033,50.103268132699995,46.974522293,46.757679180900006,48.993710691800004,45.624701955199995,46.2843197071,46.8957732347,48.827014217999995,50.6399695856,50.2140672783,46.8711505297,48.551495802299996,47.9813474046,48.8431253786,50.395941598600004,50.204283768699995,50.9715994021,49.1754122939,50.1880641926,49.716748768500004,50.3863409771,48.2618624715,49.2480727916,50.470618163299996,48.8445251059,48.0353758686,47.637403630899996,48.5721319547,48.790422117999995,48.3431516937,52.1951816069,48.5530155642,46.4103807907,49.5668683992,47.238670694899994,49.548008795499996,48.519675203,48.8883547651,50.503355704700006,49.1446725318,47.112940322,47.1596998928,47.5979923518,47.7348066298,48.305084745799995,49.2119530954,48.3434496712,48.0348258706,49.2253104672,47.1222570533,48.6381793972,45.7991156033,49.9307217534,48.3048780488,45.9854897219,48.4590084054,48.9508732253,48.3292978208,45.874830935700004,50.3308823529,52.4636263602,49.374458070100005,46.0099455363,46.9953961716,44.9454371028,50.644250828299995,48.826054026799994],"y":[6.876150407573,7.026250489748,6.589044720826,6.241556336125,6.587837837838,6.834485457154,6.829517841156,6.843649946638,6.547300908605,6.759600210416,7.560469937802,7.180224954224,6.603400553578,6.535516239768,8.021093533167,6.913931248385,7.361389445558,8.131051863642,7.899857309638,7.196299823153,7.826526741687,8.427419354839,6.57668386926,7.319968346083,7.365439093484,6.602656845982,6.401679128952,7.244534824606,7.778076303063,7.024467245462,7.557531380753,6.408544726302,6.715719063545,6.390149060272,6.269297892335,6.257197696737,6.042090970808,6.990186853072,7.454234163045,7.064169650234,6.676439232409,6.907147628591,7.893354347255,6.672058228872,6.753078418665,7.091550215489,7.424530867555,6.851119894598,7.371838225348,7.304083185392,7.599517490953,6.887201735358,6.973253275109,7.200851856782,6.993377483444,6.660284463895,7.251856853477,6.991869918699,6.747336577667,7.58382118148,6.495333077612,7.361055039699,6.471494607088,7.09880593098,7.039061458472,6.116442738324,7.2379927351,6.84133915575,6.939689228338,7.144820005496,6.350471635446,7.022397891963,7.700534759358,6.346255974509,7.062183564845,7.43127712745,7.111927568561,7.414750198255,7.062643755919,7.823559150657,7.797427652733,7.054794520548,6.355190521072,7.603997839006,6.590703094652,7.3000683527,7.490999723068,6.952857519094,7.024631825883,6.849860613301,7.157548334019,7.352171637886,6.453707310739,7.17535421812,6.811769447803,8.065843621399,6.450331125828,7.565228792448,7.369723635364,7.022397891963,7.599073947978,8.214914061443,6.953730944103,6.492299522039,8.196268140981,7.099863201094,7.028586414896,6.913785922532,7.281237810428,8.234653600109,6.407506702413,7.225592939879,7.330644039505,7.202106649111,6.828368046401,8.254230293025,6.098041792614,7.001031459515,6.580540976988,6.521441293328,7.392385189062,6.763285024155,7.119699131111,6.677839370891,7.600434310532,6.441266871576,6.09804703069,7.087031394887,6.554979391038,7.016589611096,7.635235397275,6.354470681878,6.465241326335,6.660258170832,7.33004177744,6.659113796576,6.464701109007,6.589147286822,7.832720337829,6.381515609957,6.492829204694,6.298674682334,7.14775689395,6.48088139987,7.555739058629,6.346304518151,5.837664934026,6.375179997382,6.664871415107,6.654896102132,7.322773305635,6.931100741147,6.998205588311,6.773063448813,7.290951530963,7.0468914647,6.79495686795,6.874585268746,6.578424884183,7.104795737123,7.363452461227,5.967187086531,6.513723883654,7.196097032118,6.198024948025,6.897416603963,5.887242000277,6.984667802385,7.431783902372,5.353854248882,5.81732034746,6.736957414761,7.374755107753,6.519177902867,7.077180273057,6.333032374565,6.400642742367,6.61135256157,7.492334355419,6.876675603217,7.841866493843,7.105012905855,6.919810142393,6.886815615026,7.86276865572,6.885465505693,6.000769329401,7.021857923497,6.049495875344,6.776315789474,6.812491764396,6.374818145748,6.665763446687,6.836707862214,6.759813705921,6.880849987351,6.244897959184,6.672620566471,7.304299889746,5.85520242648,6.957886476589,6.64464993395,6.229214632898,6.10117132192,6.794641624085,6.539864512767,6.635822868473,7.864415862808,7.178317456058,7.114891319023,7.092751363991,6.857989760172,7.340787554691,6.379585326954,7.637488234503,6.340436727177,7.147391138758,6.348781141173,6.203801478353,6.089489012444,6.150401685763,6.395578365574,6.998302650477,6.700646444555,7.358667919968,6.295460245799,6.373355263158,6.318751598874,7.130124777184,6.407840180927,7.182098351869,6.650149954362,6.20233858668,6.552094522019,7.539296146891,6.270583585825,7.116614505375,7.553234230615,7.373461012312,6.838673879872,6.456203907362,6.818482722097,7.040618955513,5.584813227189,7.108304219296,5.786855197696,7.260344384477,6.674708484117,6.975228161669,6.110597861951,6.264282833714,6.006757602303,7.130595536775,6.054148909501,7.027245751281,5.827948815406,6.961849067112,5.996675616929,7.180049328583,6.258047901107,6.561679790026,6.973735282702,6.121627064035,5.982905982906,6.568736141907,6.724067240672,6.501213919612,6.945183608302,7.116812964213,6.48499934495,7.27815256876,6.869531147969,6.558008213552,6.027596223675,6.293347033136,6.221167787004,7.462101411396,7.349365036477,7.074544739945,6.416571933813,5.837966640191,6.264441591784,7.279744476976,6.64736245751,6.393117140966,5.754018882368,6.518436680017,6.156021076982,7.03570954467,7.014575741801,6.065744847378,7.116883116883,6.598657024793,6.348575215374,5.951720310766,7.417360924483,6.606606606607,7.624831309042,6.384092098378,7.151664611591,7.901797692514,6.975811840171,6.699974378683,6.255585344057,6.104129263914,6.196777151841,7.542384194367,7.401954222996,7.37594390507,6.104468219006,6.408884131656,6.141912512716,7.236315086782,6.569155760842,6.754270696452,6.324764571138,6.796917996698,6.11776701504,7.199159222281,6.750129065565,5.698601490001,6.556071665561,6.953423934556,6.299010155547,6.081998370893,6.675712347354,7.751937984496,8.28313253012,6.355723435704,7.041773231032,7.866689223482,7.702371218316,7.348496898362,6.722005208333,6.586436818995,7.036283485927,7.119314436388,7.804797896812,7.177419354839,6.917631917632,6.217616580311,8.009079118029,7.135610415962,7.180675049636,8.0355645026,7.001472272207,6.918758256275,6.443914081146,7.422445996427,7.164757140552,6.957547169811,6.675328893942,7.976170776105,6.839005235602,6.839622641509,6.40770252324,7.240238252813,7.560551318078,6.372745490982,6.563063688081,7.039934129271,7.070837642192,7.066546531085,6.99753790333,7.214121258634,7.278481012658,6.874918311332,7.583965330444,6.992374305286,7.001723909296,6.799062198317,7.249759714403,6.405978913653,8.118538938663,7.03082747431,6.69812557347,6.417039750373,6.155253528489,7.62040763339,7.824152819573,6.463775922435,6.927104309303,7.876522702104,7.23195329087,6.789288612388,6.43690492155,7.055057618438,6.823222439661,7.217967025834,6.226241971425,7.890865320316,6.851612903226,6.391957304208,7.522012578616,7.330567081604,7.356497390862,6.273928615537,7.178874734607,6.48804833202,7.316770186335,6.866499405784,6.655952859247,7.020702070207,7.989452867502,6.619356417472,6.726001271456,6.705837271682,6.877967406647,7.443946188341,7.253556910569,6.861716085017,6.275706514528,7.421927808571,7.254019292605,6.389530408006,7.221494102228,7.673331602181,7.030854830551,7.046141711581,6.50039798355,7.107588357588,7.447751741609,6.807600352334,7.682775712515,7.574039067423,7.383503291597,6.23396613648,6.867873910127,7.864015394484,6.035700526519,6.993642143506,6.589763988332,6.850914752822,7.663234719145,7.29788044168,7.079201707042,7.328696548171,6.819622258841,7.733952049497,7.120233117953,6.920867067119,7.237554112554,7.870187885955,7.606870721942,7.081264698197,7.57299270073,7.753105005645,7.47098048901,7.416081186573,6.621434853625,7.194244604317,7.218332272438,7.108464267613,7.477203647416,6.787667826952,7.331898189186,6.335071873807,7.26872246696,6.46612675151,6.779016725798,6.526449968133,7.105741751104,7.159934566503,7.746214491303,6.831757093081,6.783857390443,6.752655538695,7.044819628325,8.134532655456,7.657601203158,7.36897412321,7.516600265604,7.073202444416,7.211002354107,7.189292543021,7.437070938215,8.012980529206,6.836850751927,6.792690611216,7.641975308642,7.275976512637,7.2708113804,6.189650903689,7.688546632441,6.66829506595,6.913203710764,6.338202525378,7.114472503525,6.854786754284,6.659836065574,6.698795180723,6.464646464646,6.737186752298,7.495268138801,6.822107081174,6.61497455779,6.5923048001,6.964856230032,7.752939656286,6.943056943057,7.114370256014,7.40098679824,7.093221450111,7.107169622783,7.19138571978,7.524550439995,7.099112610924,7.496823379924,6.585183337491,7.354822205168,7.010156056478,7.143768337798,6.859388867757,7.366436203646,7.679738562092,6.833374597673,7.140191566115,7.568954457986,6.896110542477,6.715754728958,6.859525012633,6.95873015873,6.945321378962,7.665550115949,7.436805470753,6.482412060302,7.253754135912,6.75799086758,7.62612436449,7.532932600077,7.165149544863,7.617927610088,6.714782832839,7.245638609449,7.977903391572,6.770899003909,6.241234221599,7.372146954717,6.345401791346,6.455089820359,6.155732679338,6.309420916162,6.758448060075,7.094757094757,6.510515048483,6.540940558606,6.901458555674,7.407868525896,7.89568561471,6.73304293715,6.805406051908,6.424717999019,7.084434377753,7.52808988764,7.003937477628,6.093146718147,6.720528828498,6.908960057575,7.079318013343,7.251005441211,7.402455330011,7.54808862917,7.270440251572,6.961497198713,6.573957016435,6.916996047431,5.59777842736,7.59388038943,6.179164725974,6.728196896736,6.796116504854,7.437575110162,6.820760068066,6.864988558352,6.639839034205,7.489231624288,7.741845163097,7.676969092722,8.595689092097,6.678646301288,7.218741487333,6.795210698181,7.232441471572,7.216928251121,7.325646794151,6.993101582578,6.33149616884,6.961495535714,6.821662258109,7.420595356787,8.097902097902,6.935506935507,7.315123251166,6.22856358897,6.599378881988,6.961113778205,6.799598335963,6.673250564334,6.911447084233,7.015359070154,6.586322869955,6.773823191734,6.810749324613,7.111716621253,6.782225890769,7.145938173976,7.225189766657,7.443598218135,7.129225736096,6.504509428806,6.493325917686,7.411152845998,6.814022244122,6.735610287114,7.367678193366,7.179341657208,6.24556422995,5.850396991224,6.802525832377,6.579490708878,6.516537649543,7.558302894071,7.290803645402,6.754596322942,6.719310839914,6.694915254237,6.600124766064,8.028098344205,7.335025380711,7.027635363261,6.816768254758,7.060333761232,6.654064272212,7.685523497543,6.116923076923,7.347195967234,6.271186440678,7.65525982256,7.474352711285,6.761391474767,6.858270630319,7.259089753369,7.124431887974,5.970519013997,6.741857812698,7.489257213014,5.980563169698,6.77841673804,6.885205946868,7.367253911544,7.161837276983,7.065491183879,7.121951219512,6.526631657914,6.63233262153,6.681999757899,5.703971119134,6.831449509378,6.95889698231,6.710833026623,7.156008346631,5.684236884938,6.468466227143,6.631616680607,6.059113300493,6.586603937105,6.47016534867,7.057780030411,6.973863495603,6.524360829715,6.290483308421,6.543916397114,6.597735105859,5.849241311796,6.585396506221,6.468835361311,5.962394854033,6.127391620247,5.449982072427,6.814637072585,6.925103500188,6.225775193798,7.087566521529,6.304186276938,5.618942461048,6.09565112637,6.057669008965,7.184805697863,6.44594933534,7.29797979798,6.492855352219,6.685441410555,6.288672812224,6.607011522432,6.788383776498,6.623931623932,6.540787362705,6.835764109068,6.29796564746,7.006768613688,6.298619824341,6.847909720441,6.971184094627,5.722891566265,6.659170414793,6.841519237907,5.856697819315,6.678145369573,6.22675464907,6.985785445268,5.867221950024,5.667966845441,6.503144654088,5.281354315689,5.600976205003,6.145741878841,6.824644549763,7.160055759726,7.082568807339,6.331608770633,6.538961806787,6.356608172782,6.650514839491,7.065082900272,7.081837315835,7.448928749377,6.746626686657,7.284353059178,6.945812807882,7.016450648056,6.267444810962,6.748388727411,7.110150089036,6.92075015124,6.190777005685,6.291967172345,6.893156080748,6.467538879289,6.455571919489,8.08364926012,6.5296692607,5.578462284744,6.716506467307,6.247734138973,6.938675787931,6.633354153654,6.561711332773,7.36964377904,6.879276637341,6.391478029294,6.073597713469,6.118546845124,6.593001841621,6.644559076394,6.707855251545,6.575619625695,6.231343283582,7.084565345949,6.018808777429,6.827260622201,5.761212886924,7.066381156317,6.146341463415,5.731559854897,6.797417468632,6.495790928509,6.404358353511,5.668265092832,7.254901960784,7.788238170926,6.911928651059,5.671323703528,6.166707051127,5.444297877443,7.301509387655,6.589245140116],"type":"scatter"},{"customdata":[["2009","NYL",-0.158288186704],["2009","PHO",1.482253937789],["2009","SAC",1.270915462989],["2009","SAN",1.23266836937],["2009","LAS",0.70847823899],["2009","DET",1.407536031673],["2009","WAS",-0.948845007434],["2009","CON",-0.501899153465],["2009","MIN",-0.913981445217],["2009","IND",0.945452095436],["2009","SEA",0.866138132926],["2009","CHI",-0.033054793647],["2009","ATL",1.596936845938],["2010","NYL",0.220418632953],["2010","PHO",-1.118887338087],["2010","SAN",-0.753549349685],["2010","LAS",0.683608142689],["2010","TUL",-1.997290675226],["2010","WAS",-0.588818805702],["2010","CON",1.439338887816],["2010","MIN",0.506465049626],["2010","IND",0.835417018307],["2010","SEA",0.616238840378],["2010","CHI",0.139888049766],["2010","ATL",0.052633723581],["2011","NYL",-1.826662249618],["2011","PHO",-0.304542928587],["2011","SAN",-0.69972682801],["2011","LAS",-0.979307633673],["2011","TUL",-0.388224109996],["2011","WAS",-1.05762598456],["2011","CON",0.770778270892],["2011","MIN",0.399462803272],["2011","IND",1.545420993329],["2011","SEA",-0.135079156601],["2011","CHI",-0.454421335244],["2011","ATL",0.136040001738],["2012","NYL",-0.913355374413],["2012","PHO",-0.176424221989],["2012","SAN",-0.693747227923],["2012","LAS",3.029023337088],["2012","TUL",0.339195908619],["2012","WAS",2.479923245905],["2012","CON",1.021505140328],["2012","MIN",0.963521029442],["2012","IND",0.080259459072],["2012","SEA",-1.686261503251],["2012","CHI",-1.711534577754],["2012","ATL",0.532474611329],["2013","NYL",0.8795036023],["2013","PHO",-0.955463606893],["2013","SAN",0.723295875186],["2013","LAS",-0.306153536818],["2013","TUL",2.099329603161],["2013","WAS",-0.210520628633],["2013","CON",-1.222925415217],["2013","MIN",0.486735849474],["2013","IND",-1.187115203639],["2013","SEA",-1.045878815954],["2013","CHI",-0.037560282846],["2013","ATL",0.484435463043],["2014","NYL",0.216923218469],["2014","PHO",-0.663776904342],["2014","SAN",1.318939110239],["2014","LAS",0.41400990891],["2014","TUL",-2.368460830174],["2014","WAS",1.033346222367],["2014","CON",0.489673986904],["2014","MIN",-0.271382614199],["2014","IND",-0.169704957551],["2014","SEA",0.188809355338],["2014","CHI",-0.847364662033],["2014","ATL",0.313957313257],["2015","NYL",-1.714584728261],["2015","PHO",0.875716957545],["2015","SAN",-1.430960218365],["2015","LAS",-1.096430452538],["2015","TUL",-0.832383234651],["2015","WAS",0.607841195373],["2015","CON",-0.375803614725],["2015","MIN",0.533781582006],["2015","IND",0.826628926675],["2015","SEA",-0.828244488056],["2015","CHI",0.876121669702],["2015","ATL",0.099693780668],["2016","NYL",0.695321903508],["2016","PHO",1.457211939672],["2016","SAN",0.341220278542],["2016","LAS",-0.273455716435],["2016","DAL",-0.585760075733],["2016","WAS",1.347382553348],["2016","CON",1.998773025251],["2016","MIN",-0.876306828326],["2016","IND",1.009589765945],["2016","SEA",0.158008610895],["2016","CHI",-0.484023161789],["2016","ATL",0.361257639713],["2017","NYL",0.6725415082],["2017","PHO",1.893597857761],["2017","SAN",-0.008583965683],["2017","LAS",-0.619305946778],["2017","DAL",-0.58871139499],["2017","WAS",-0.172823190251],["2017","CON",-0.085214121639],["2017","MIN",-0.971708117823],["2017","IND",0.569437900725],["2017","SEA",0.411201100707],["2017","CHI",-1.090101398838],["2017","ATL",0.11629582232],["2018","NYL",0.026044041795],["2018","PHO",0.17797301331],["2018","LVA",0.054249737214],["2018","LAS",-0.040871799702],["2018","DAL",0.471967416561],["2018","WAS",0.843716517496],["2018","CON",-0.07243306553],["2018","MIN",-2.410978507325],["2018","IND",0.374263162902],["2018","SEA",1.574966967384],["2018","CHI",0.42289791564],["2018","ATL",-0.633824469298],["2019","NYL",-0.019438609578],["2019","PHO",-0.156136025866],["2019","LVA",-1.798878200346],["2019","LAS",0.778289941419],["2019","DAL",0.679462979651],["2019","WAS",0.170703484737],["2019","CON",-0.239238373994],["2019","MIN",0.337539346624],["2019","IND",0.358318641375],["2019","SEA",0.495296968311],["2019","CHI",-1.610023640629],["2019","ATL",0.672099803204],["2020","NYL",-1.180963427162],["2020","PHO",-0.066604699049],["2020","LVA",-1.041996055487],["2020","LAS",0.578468449123],["2020","DAL",0.432354042615],["2020","WAS",1.408417622034],["2020","CON",-1.266519287295],["2020","MIN",1.255061823407],["2020","IND",-0.639747369373],["2020","SEA",-0.917985209244],["2020","CHI",0.068660732443],["2020","ATL",1.812185390138],["2021","NYL",0.539188188373],["2021","PHO",-0.238359958808],["2021","LVA",-1.258091153775],["2021","LAS",0.552952663855],["2021","DAL",0.176628903781],["2021","WAS",-0.27677011092],["2021","CON",0.733782659484],["2021","MIN",1.199631353003],["2021","IND",-0.232615814224],["2021","SEA",-2.449866581488],["2021","CHI",0.29013567001],["2021","ATL",-0.549759256155],["2022","NYL",1.175575812305],["2022","PHO",0.687862752733],["2022","LVA",1.395916369394],["2022","LAS",-1.714272854403],["2022","DAL",-1.715290811873],["2022","WAS",-2.016785182448],["2022","CON",0.235482393675],["2022","MIN",0.867752315082],["2022","IND",1.298596213159],["2022","SEA",0.02775289626],["2022","CHI",1.413155913158],["2022","ATL",0.287779070974],["2023","NYL",-0.840152915773],["2023","PHO",-0.173402618958],["2023","LVA",-0.056440213536],["2023","LAS",0.466832366579],["2023","DAL",0.333185415728],["2023","WAS",-0.954235758861],["2023","CON",-1.732626260033],["2023","MIN",-0.579212117192],["2023","IND",-0.008306721589],["2023","SEA",-1.497345773706],["2023","CHI",1.478429277911],["2023","ATL",1.156147667515],["2024","NYL",0.014983096935],["2024","PHO",-0.031930657709],["2024","LVA",0.186444239055],["2024","LAS",-1.106911434384],["2024","DAL",-1.645928307316],["2024","WAS",-1.543326230571],["2024","CON",0.294909885156],["2024","MIN",-0.198369574827],["2024","IND",0.167333613591],["2024","SEA",0.330052828784],["2024","CHI",0.762757985749],["2024","ATL",-0.942848817752],["2025","NYL",-1.557783959752],["2025","PHX",0.485363604676],["2025","LVA",-0.379708414649],["2025","LAS",1.330575629569],["2025","DAL",-0.356640714063],["2025","WAS",0.156984442637],["2025","CON",-0.244792871732],["2025","MIN",0.601174685751],["2025","IND",-0.119534985125],["2025","SEA",0.244927072609],["2025","CHI",1.642312976475],["2025","ATL",0.760358984823],["2025","GSV",1.356384920585],["2026","NYL",0.208267462611],["2026","PHX",-0.347276371462],["2026","LVA",0.079073221436],["2026","LAS",-0.627421483823],["2026","DAL",-1.70634584999],["2026","WAS",1.917411927455],["2026","CON",2.178819484555],["2026","MIN",-0.023533748361],["2026","IND",-0.855952778955],["2026","PDX",1.394400719586],["2026","SEA",-0.37588630461],["2026","CHI",0.176805780725],["2026","ATL",0.864817629829],["2026","GSV",1.243517255434],["2026","TOR",-0.598883679237]],"hovertemplate":"WNBA %{customdata[0]} %{customdata[1]}: stops %{x:.1f}%, kills %{y:.2f} per 100 (z %{customdata[2]:.2f})\u003cextra\u003e\u003c\u002fextra\u003e","marker":{"color":"#eb6834","opacity":0.6,"size":7},"mode":"markers","name":"WNBA","x":[54.31512272370001,50.052246604,52.6676829268,51.7506733359,55.0557324841,53.794642857099994,53.2762472077,53.316138540900006,50.5005561735,55.06591337099999,54.722114263499996,51.606658923699996,53.431372549,52.8250773994,48.9655172414,49.7872340426,51.06221547799999,49.751773049600004,54.085603112799994,52.802359882000005,52.5683060109,54.799235181600004,54.3276661515,52.566096423,52.583798882699995,54.3066821166,50.8438061041,54.2328042328,51.2879661669,49.2295839753,50.0982318271,54.558932542600004,55.6199304751,53.1506849315,54.799513973299995,53.38173481089999,53.6970567121,52.556158017,50.5286183011,54.0436949023,53.8290788013,50.8921933086,50.4515115823,54.5216741405,54.7924528302,54.4492355939,55.252764613000004,53.550863723599996,55.848918225199995,53.541507997000004,52.00743494420001,51.610399689599994,54.7183886609,51.2752188809,53.446969697,52.5391370752,54.9079754601,53.1906300485,51.83098591550001,54.203454894400004,54.51529671949999,53.4821085033,54.8484848485,50.3095975232,53.263315829,48.5400075844,53.56037151700001,52.0380952381,53.529187333100005,51.2386944554,51.641313050399994,51.9741837509,54.1486291486,56.4003103181,54.5134818288,51.6679596587,51.739304278300004,51.9298245614,54.2015133413,52.0622568093,55.162936788399996,52.902979373600004,52.6315789474,52.6236881559,51.925233644900004,52.6818515797,51.0748702743,50.4428186369,52.785247791,47.7530142492,50.057012542799995,50.6046170759,54.37219730940001,50.5135032332,50.7869481766,49.8699368265,50.8196721311,53.6789935189,51.078869047599994,50.285496764399994,54.8706240487,48.9898989899,50.952018278800004,52.971199416699996,55.3070507961,49.0226140284,50.7004922378,50.1258540093,51.627056672799995,50.7451564829,50.9034986544,51.358392259,52.82273983420001,50.3984819734,51.2750098078,52.5925925926,53.3562166285,49.887471868,53.5567970205,48.4925535779,53.913043478300004,51.080982044699994,53.4856242615,56.3750926612,55.1800965466,52.4744697565,53.778705636699996,55.2913198573,55.391776570999994,52.982456140400004,54.9404075356,53.0438010393,52.989845806699996,51.4525139665,52.44716351499999,54.980523094,54.97737556559999,49.2254733219,52.91738879259999,54.2857142857,52.9036004646,48.0296973158,56.73076923080001,51.4301738643,50.4206393718,51.8592562975,53.341384863100004,55.5218216319,55.0020088389,52.0750199521,51.832873472600006,57.1981091534,55.3107789142,50.3810669876,54.5067698259,53.4383403765,51.533018867900005,52.5708289612,52.2361984626,53.510565780499995,51.2313562262,51.6483516484,55.5871886121,55.748523793000004,52.5174825175,49.863760217999996,54.825174825199994,53.517241379299996,54.2285122541,54.162768942899994,50.225660864,55.1681579759,53.7421383648,52.3794808405,53.445006321099996,54.1996830428,52.4079320113,51.5689381933,52.0774757888,51.4599686028,52.8117359413,55.62934851359999,52.2189828312,54.167997444899996,50.6910961106,48.955773955800005,52.7010050251,56.054557551600006,55.9961928934,50.8859185577,54.9580354367,51.4458214172,54.1812400636,53.9368917723,53.7442396313,52.646887725400006,51.5348288076,50.161243037199995,52.567164179100004,49.7163332338,55.0889025138,52.284114353099994,53.6507936508,50.102910908599995,53.8203957382,54.5892266025,51.1276049101,50.730449727899995,51.8277132332,49.232486742999995,51.19493233520001,52.9360967185,49.1107286288,52.892561983499995,49.6542185339,48.5616633438,50.7038288288,49.545579730099995,51.981879954700005,54.620060790299995,47.0538243626],"y":[8.511480601742,7.419017763845,8.384146341463,8.003078106964,9.076433121019,8.74255952381,7.89277736411,8.069270449521,6.896551724138,9.152542372881,8.938981733385,7.510646535037,8.683473389356,8.010835913313,6.344827586207,6.692456479691,7.549317147193,6.382978723404,8.287937743191,8.407079646018,8.087431693989,8.986615678776,8.732612055641,7.931570762053,7.925977653631,8.033989957513,7.21723518851,8.314436885865,7.151095732411,6.587057010786,6.71905697446,8.89547813195,9.192738509077,8.610567514677,8.707978938842,8.062667176156,8.399138549892,7.668474051123,7.109004739336,8.240705251054,9.248982611913,7.434944237918,7.891637220259,8.893871449925,9.018867924528,8.624068992552,8.372827804107,7.754318618042,9.314264759809,8.530083777609,7.472118959108,7.799767171129,8.653487504662,8.031975637609,8.219696969697,7.521954944635,8.934049079755,7.794830371567,7.364185110664,8.483685220729,8.809436048655,8.272412466333,8.560606060606,7.469040247678,8.327081770443,5.80204778157,8.552631578947,7.92380952381,8.164822586799,7.314195831695,7.566052842274,7.441154138193,8.549783549784,8.844065166796,8.870652598671,7.176105508146,7.277089164334,7.524366471735,8.721624850657,7.665369649805,9.030231645073,8.288770053476,7.719298245614,8.170914542729,7.738317757009,8.155767817781,7.783543365456,7.23912206392,7.87552823665,6.065034709536,7.411630558723,7.768413338219,8.295964125561,7.455306200076,7.332053742802,6.837606837607,7.395264116576,8.539839878002,7.924107142857,7.042253521127,8.599695585997,6.493506493506,7.311500380807,8.020415603354,8.642911296437,6.784208509007,7.383566830746,6.724199928083,7.568555758684,7.228017883756,7.381776239908,7.51767770748,8.014212396368,7.286527514231,7.689289917615,7.888888888889,7.475209763539,7.08927231808,8.752327746741,6.610969851072,8.241965973535,7.401978746794,8.192201654195,8.89547813195,9.09766060156,8.051846032993,8.39248434238,8.799048751486,9.038013964313,8.2261208577,8.958093041138,7.609502598367,8.273787138022,7.094972067039,7.842046718576,8.402893711742,8.993212669683,6.884681583477,8.549971114962,8.114285714286,8.536585365854,6.110793832096,9.162895927602,7.459338194055,7.795849691531,7.796881247501,8.091787439614,8.614800759013,8.959421454399,7.781324820431,7.528577059519,9.883970777826,9.284028324154,7.059767348576,7.8916827853,8.336534767576,7.350628930818,8.219657222805,7.966457023061,8.65712338105,7.006590357267,7.089684509039,8.46975088968,9.169850642584,8.111888111888,7.322888283379,8.776223776224,8.655172413793,8.629616845012,8.29435609604,7.027724049001,8.855291576674,8.459119496855,7.941903584672,7.996207332491,8.050713153724,7.711677683349,7.543581616482,7.37269603249,7.880690737834,8.28239608802,9.044908285895,7.742144476838,8.527626956244,6.943105110897,6.203931203931,7.537688442211,9.281437125749,9.137055837563,7.336027354678,8.890270438297,7.689863361932,8.203497615262,8.021232674727,8.467741935484,7.882489819663,7.851239669421,6.948109058927,7.940298507463,6.867721707973,9.012875536481,7.780725022104,8.340548340548,7.409585416054,8.584474885845,9.027986758953,7.422209534685,7.189916929247,7.679229243412,6.586659224114,7.025626259718,8.520437535982,7.257601835915,8.036477628954,6.694329183956,6.892623184278,7.150900900901,6.912696226935,7.9275198188,8.966565349544,5.892351274788],"type":"scatter"},{"hovertemplate":"stops %{x:.1f}%: %{y:.2f} kills per 100\u003cextra\u003e\u003c\u002fextra\u003e","line":{"color":"#898781","dash":"dot"},"mode":"lines","name":"Independent possessions (100 a game)","x":[44.0,44.5,45.0,45.5,46.0,46.5,47.0,47.5,48.0,48.5,49.0,49.5,50.0,50.5,51.0,51.5,52.0,52.5,53.0,53.5,54.0,54.50000000000001,55.00000000000001,55.50000000000001,56.00000000000001,56.49999999999999,57.00000000000001,57.49999999999999,58.00000000000001],"y":[5.136610129494167,5.283534137542818,5.432615964899859,5.5838502658944815,5.737231434580371,5.892753613679896,6.050410703339436,6.210196369695135,6.372104053253478,6.536126977087548,6.702258154851758,6.870490398617305,7.04081632653061,7.21322837029721,7.387718782493478,7.564279643708567,7.742902869519178,7.923580217299399,8.1063032928684,8.291063556978225,8.477852331644398,8.66666080632172,8.857480043927952,9.050300986717682,9.245114462009232,9.441911187766722,9.640681778040271,9.84141674826634,10.044106520431301],"type":"scatter"}],                        {"template":{"data":{"barpolar":[{"marker":{"line":{"color":"white","width":0.5},"pattern":{"fillmode":"overlay","size":10,"solidity":0.2}},"type":"barpolar"}],"bar":[{"error_x":{"color":"#52514e"},"error_y":{"color":"#52514e"},"marker":{"line":{"color":"white","width":0.5},"pattern":{"fillmode":"overlay","size":10,"solidity":0.2}},"type":"bar"}],"carpet":[{"aaxis":{"endlinecolor":"#52514e","gridcolor":"#e1e0d9","linecolor":"#e1e0d9","minorgridcolor":"#e1e0d9","startlinecolor":"#52514e"},"baxis":{"endlinecolor":"#52514e","gridcolor":"#e1e0d9","linecolor":"#e1e0d9","minorgridcolor":"#e1e0d9","startlinecolor":"#52514e"},"type":"carpet"}],"choropleth":[{"colorbar":{"outlinewidth":0,"ticks":""},"type":"choropleth"}],"contourcarpet":[{"colorbar":{"outlinewidth":0,"ticks":""},"type":"contourcarpet"}],"contour":[{"colorbar":{"outlinewidth":0,"ticks":""},"colorscale":[[0.0,"#0d0887"],[0.1111111111111111,"#46039f"],[0.2222222222222222,"#7201a8"],[0.3333333333333333,"#9c179e"],[0.4444444444444444,"#bd3786"],[0.5555555555555556,"#d8576b"],[0.6666666666666666,"#ed7953"],[0.7777777777777778,"#fb9f3a"],[0.8888888888888888,"#fdca26"],[1.0,"#f0f921"]],"type":"contour"}],"heatmap":[{"colorbar":{"outlinewidth":0,"ticks":""},"colorscale":[[0.0,"#0d0887"],[0.1111111111111111,"#46039f"],[0.2222222222222222,"#7201a8"],[0.3333333333333333,"#9c179e"],[0.4444444444444444,"#bd3786"],[0.5555555555555556,"#d8576b"],[0.6666666666666666,"#ed7953"],[0.7777777777777778,"#fb9f3a"],[0.8888888888888888,"#fdca26"],[1.0,"#f0f921"]],"type":"heatmap"}],"histogram2dcontour":[{"colorbar":{"outlinewidth":0,"ticks":""},"colorscale":[[0.0,"#0d0887"],[0.1111111111111111,"#46039f"],[0.2222222222222222,"#7201a8"],[0.3333333333333333,"#9c179e"],[0.4444444444444444,"#bd3786"],[0.5555555555555556,"#d8576b"],[0.6666666666666666,"#ed7953"],[0.7777777777777778,"#fb9f3a"],[0.8888888888888888,"#fdca26"],[1.0,"#f0f921"]],"type":"histogram2dcontour"}],"histogram2d":[{"colorbar":{"outlinewidth":0,"ticks":""},"colorscale":[[0.0,"#0d0887"],[0.1111111111111111,"#46039f"],[0.2222222222222222,"#7201a8"],[0.3333333333333333,"#9c179e"],[0.4444444444444444,"#bd3786"],[0.5555555555555556,"#d8576b"],[0.6666666666666666,"#ed7953"],[0.7777777777777778,"#fb9f3a"],[0.8888888888888888,"#fdca26"],[1.0,"#f0f921"]],"type":"histogram2d"}],"histogram":[{"marker":{"pattern":{"fillmode":"overlay","size":10,"solidity":0.2}},"type":"histogram"}],"mesh3d":[{"colorbar":{"outlinewidth":0,"ticks":""},"type":"mesh3d"}],"parcoords":[{"line":{"colorbar":{"outlinewidth":0,"ticks":""}},"type":"parcoords"}],"pie":[{"automargin":true,"type":"pie"}],"scatter3d":[{"line":{"colorbar":{"outlinewidth":0,"ticks":""}},"marker":{"colorbar":{"outlinewidth":0,"ticks":""}},"type":"scatter3d"}],"scattercarpet":[{"marker":{"colorbar":{"outlinewidth":0,"ticks":""}},"type":"scattercarpet"}],"scattergeo":[{"marker":{"colorbar":{"outlinewidth":0,"ticks":""}},"type":"scattergeo"}],"scattergl":[{"marker":{"colorbar":{"outlinewidth":0,"ticks":""}},"type":"scattergl"}],"scattermapbox":[{"marker":{"colorbar":{"outlinewidth":0,"ticks":""}},"type":"scattermapbox"}],"scattermap":[{"marker":{"colorbar":{"outlinewidth":0,"ticks":""}},"type":"scattermap"}],"scatterpolargl":[{"marker":{"colorbar":{"outlinewidth":0,"ticks":""}},"type":"scatterpolargl"}],"scatterpolar":[{"marker":{"colorbar":{"outlinewidth":0,"ticks":""}},"type":"scatterpolar"}],"scatter":[{"fillpattern":{"fillmode":"overlay","size":10,"solidity":0.2},"type":"scatter"}],"scatterternary":[{"marker":{"colorbar":{"outlinewidth":0,"ticks":""}},"type":"scatterternary"}],"surface":[{"colorbar":{"outlinewidth":0,"ticks":""},"colorscale":[[0.0,"#0d0887"],[0.1111111111111111,"#46039f"],[0.2222222222222222,"#7201a8"],[0.3333333333333333,"#9c179e"],[0.4444444444444444,"#bd3786"],[0.5555555555555556,"#d8576b"],[0.6666666666666666,"#ed7953"],[0.7777777777777778,"#fb9f3a"],[0.8888888888888888,"#fdca26"],[1.0,"#f0f921"]],"type":"surface"}],"table":[{"cells":{"fill":{"color":"#eceae2"},"line":{"color":"white"}},"header":{"fill":{"color":"#e1e0d9"},"line":{"color":"white"}},"type":"table"}]},"layout":{"annotationdefaults":{"arrowcolor":"#52514e","arrowhead":0,"arrowwidth":1},"autotypenumbers":"strict","coloraxis":{"colorbar":{"outlinewidth":0,"ticks":""}},"colorscale":{"diverging":[[0,"#8e0152"],[0.1,"#c51b7d"],[0.2,"#de77ae"],[0.3,"#f1b6da"],[0.4,"#fde0ef"],[0.5,"#f7f7f7"],[0.6,"#e6f5d0"],[0.7,"#b8e186"],[0.8,"#7fbc41"],[0.9,"#4d9221"],[1,"#276419"]],"sequential":[[0.0,"#0d0887"],[0.1111111111111111,"#46039f"],[0.2222222222222222,"#7201a8"],[0.3333333333333333,"#9c179e"],[0.4444444444444444,"#bd3786"],[0.5555555555555556,"#d8576b"],[0.6666666666666666,"#ed7953"],[0.7777777777777778,"#fb9f3a"],[0.8888888888888888,"#fdca26"],[1.0,"#f0f921"]],"sequentialminus":[[0.0,"#0d0887"],[0.1111111111111111,"#46039f"],[0.2222222222222222,"#7201a8"],[0.3333333333333333,"#9c179e"],[0.4444444444444444,"#bd3786"],[0.5555555555555556,"#d8576b"],[0.6666666666666666,"#ed7953"],[0.7777777777777778,"#fb9f3a"],[0.8888888888888888,"#fdca26"],[1.0,"#f0f921"]]},"colorway":["#636efa","#EF553B","#00cc96","#ab63fa","#FFA15A","#19d3f3","#FF6692","#B6E880","#FF97FF","#FECB52"],"font":{"color":"#52514e"},"geo":{"bgcolor":"white","lakecolor":"white","landcolor":"white","showlakes":true,"showland":true,"subunitcolor":"#e1e0d9"},"hoverlabel":{"align":"left"},"hovermode":"closest","mapbox":{"style":"light"},"paper_bgcolor":"#fcfcfb","plot_bgcolor":"#fcfcfb","polar":{"angularaxis":{"gridcolor":"#eceae2","linecolor":"#eceae2","ticks":""},"bgcolor":"white","radialaxis":{"gridcolor":"#eceae2","linecolor":"#eceae2","ticks":""}},"scene":{"xaxis":{"backgroundcolor":"white","gridcolor":"#DFE8F3","gridwidth":2,"linecolor":"#eceae2","showbackground":true,"ticks":"","zerolinecolor":"#eceae2"},"yaxis":{"backgroundcolor":"white","gridcolor":"#DFE8F3","gridwidth":2,"linecolor":"#eceae2","showbackground":true,"ticks":"","zerolinecolor":"#eceae2"},"zaxis":{"backgroundcolor":"white","gridcolor":"#DFE8F3","gridwidth":2,"linecolor":"#eceae2","showbackground":true,"ticks":"","zerolinecolor":"#eceae2"}},"shapedefaults":{"line":{"color":"#52514e"}},"ternary":{"aaxis":{"gridcolor":"#DFE8F3","linecolor":"#A2B1C6","ticks":""},"baxis":{"gridcolor":"#DFE8F3","linecolor":"#A2B1C6","ticks":""},"bgcolor":"white","caxis":{"gridcolor":"#DFE8F3","linecolor":"#A2B1C6","ticks":""}},"title":{"x":0.05},"xaxis":{"automargin":true,"gridcolor":"#eceae2","linecolor":"#eceae2","ticks":"","title":{"standoff":15},"zerolinecolor":"#eceae2","zerolinewidth":2},"yaxis":{"automargin":true,"gridcolor":"#eceae2","linecolor":"#eceae2","ticks":"","title":{"standoff":15},"zerolinecolor":"#eceae2","zerolinewidth":2}}},"margin":{"l":70,"r":30,"t":60,"b":60},"legend":{"orientation":"h","y":-0.2},"title":{"text":"Stop rate explains 90% (NBA) and 86% (WNBA) of the variation in kill rate"},"xaxis":{"title":{"text":"Opponent possessions ending in no points (%)"}},"yaxis":{"title":{"text":"Kills per 100 opponent possessions"}},"height":440},                        {"responsive": true}                    )                };            </script>        </div>
+<script>
+(function () {
+  // Figures are authored on the light family palette; on a dark scheme the
+  // same spec is re-rendered through this light->dark map (chrome and series
+  // steps from the family palette). Each plot's light spec is remembered so
+  // theme flips are lossless in both directions.
+  var MAP = {"white": "#1a1a19", "#fff": "#1a1a19", "#fcfcfb": "#1a1a19",
+    "#ffffff": "#1a1a19",
+    "#f2f1ea": "#21201e", "#eceae2": "#262624", "#e1e0d9": "#2c2c2a",
+    "#c3c2b7": "#383835", "#52514e": "#c3c2b7", "#2a3f5f": "#c3c2b7",
+    "#0b0b0b": "#f5f3ec", "#161512": "#f5f3ec", "#2a78d6": "#3987e5",
+    "#eb6834": "#d95926", "#1baf7a": "#199e70"};
+  var mq = window.matchMedia("(prefers-color-scheme: dark)");
+  // The parent page's manual theme toggle overrides the OS preference; it
+  // arrives as a postMessage from the embedding page.
+  var override = null;
+  var themeFn = null;
+  function isDark() {
+    return override ? override === "dark" : mq.matches;
+  }
+  function stampBody() {
+    document.body.classList.toggle("fam-dark", override === "dark");
+    document.body.classList.toggle("fam-light", override === "light");
+  }
+  window.addEventListener("message", function (e) {
+    if (!e.data || !e.data.famTheme) { return; }
+    var t = e.data.famTheme;
+    override = (t === "dark" || t === "light") ? t : null;
+    stampBody();
+    if (themeFn) { themeFn(); }
+  });
+  function darken(o) {
+    if (typeof o === "string") { return MAP[o.toLowerCase()] || o; }
+    if (Array.isArray(o)) { return o.map(darken); }
+    if (o && typeof o === "object") {
+      var r = {}; for (var k in o) { r[k] = darken(o[k]); } return r;
+    }
+    return o;
+  }
+  function copy(o) { return JSON.parse(JSON.stringify(o)); }
+  // Hand-built figure pages (e.g. animated histograms) often omit chrome
+  // colors and inherit plotly's defaults; pin those to the family's light
+  // values so the dark map has something to map.
+  function withDefaults(layout) {
+    var L = layout ? copy(layout) : {};
+    L.paper_bgcolor = L.paper_bgcolor || "#fcfcfb";
+    L.plot_bgcolor = L.plot_bgcolor || "#fcfcfb";
+    L.font = L.font || {}; L.font.color = L.font.color || "#52514e";
+    ["xaxis", "yaxis"].forEach(function (a) {
+      L[a] = L[a] || {};
+      L[a].gridcolor = L[a].gridcolor || "#e1e0d9";
+      if (L[a].zeroline !== false) {
+        L[a].zerolinecolor = L[a].zerolinecolor || "#e1e0d9";
+      }
+    });
+    return L;
+  }
+  // Route every author-side render through the theme: remember the light
+  // spec, darken it when the scheme is dark.
+  var origReact = null;
+  function installWrapper() {
+    if (origReact || !window.Plotly) { return; }
+    origReact = Plotly.react;
+    Plotly.react = function (gd, data, layout, config) {
+      var el = typeof gd === "string" ? document.getElementById(gd) : gd;
+      var L = withDefaults(layout), D = copy(data || []);
+      if (el) { el._lightSpec = {data: copy(D), layout: copy(L),
+                                 config: config}; }
+      if (isDark()) { D = darken(D); L = darken(L); }
+      return origReact.call(Plotly, el || gd, D, L, config);
+    };
+  }
+  installWrapper();
+  window.addEventListener("load", function () {
+    installWrapper();
+    var gs = Array.prototype.slice.call(
+      document.querySelectorAll(".plotly-graph-div, .js-plotly-plot"));
+    // Plots rendered before the wrapper installed (write_html pages, or a
+    // hand-built page that drew during parse): their current spec is the
+    // light spec.
+    gs.forEach(function (g) {
+      if (!g._lightSpec) {
+        g._lightSpec = {data: copy(g.data),
+                        layout: withDefaults(g.layout)};
+      }
+    });
+    // Re-render each plot from its light spec, darkened when the scheme is
+    // dark. Sizing is plotly's own job: the layouts get autosize and every
+    // figure ships config {responsive: true}, which react() preserves.
+    function theme() {
+      gs.forEach(function (g) {
+        var src = g._lightSpec;
+        var D = copy(src.data), L = copy(src.layout);
+        delete L.width; L.autosize = true;
+        if (isDark()) { D = darken(D); L = darken(L); }
+        origReact.call(Plotly, g, D, L, src.config);
+      });
+    }
+    themeFn = theme;
+    stampBody();
+    theme();
+    if (mq.addEventListener) { mq.addEventListener("change", theme); }
+  });
+})();
+</script></body>
+</html>
