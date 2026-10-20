@@ -38,3 +38,6 @@ data/raw/
 # lives in ../.pbp-archive/). Derived team- and game-level tables go in output/.
 data/*.parquet
 data/*.csv
+# Possession rows (archive copies and derived per-possession tables) are
+# NBA.com data too: every subfolder of data/ stays local.
+data/*/
