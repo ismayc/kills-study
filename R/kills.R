@@ -40,11 +40,13 @@ one_season <- function(league, year) {
   lg <- league; yr <- year; sl <- season_label(league, year)
   fin <- read_finals(league, year)
   raw <- nanoparquet::read_parquet(file.path("data", "raw_possessions", sprintf("%s_%d.parquet", league, year)))
-  poss <- possessions(raw, fin)
   ev <- nanoparquet::read_parquet(file.path(ARCHIVE, "events", sprintf("%s_%d_rs.parquet", league, year)),
                                   col_select = c("gameId", "seq", "period", "secs_left", "actionType",
-                                                 "location", "score_h", "score_a", "home_id", "away_id")) |>
-    filter(gameId %in% poss$gameId)
+                                                 "location", "score_h", "score_a", "home_id", "away_id",
+                                                 "isFieldGoal", "teamId"))
+  live <- sprintf("%s_%d", league, year) %in% names(LIVE)
+  poss <- if (live) live_possessions(raw, fin, ev) else possessions(raw, fin)
+  ev <- ev |> filter(gameId %in% poss$gameId)
   sc <- scoring_events(ev)
   ap <- attribute_points(poss, sc)
   out <- ap$poss
@@ -52,6 +54,7 @@ one_season <- function(league, year) {
   got <- out |> group_by(gameId, team = off) |> summarise(pts = sum(pts), .groups = "drop")
   cmp <- tot |> left_join(got, by = c("gameId", "team")) |> mutate(pts = coalesce(pts, 0))
   val <- tibble(league = league, year = year, season = season_label(league, year),
+                source = if (live) "live" else "archive",
                 games_ok = sum(fin$status == "ok"), games = n_distinct(poss$gameId),
                 possessions = nrow(poss), abbr_unmatched = sum(!poss$abbr_ok),
                 points_captured = round(sum(cmp$pts) / sum(cmp$all), 12),

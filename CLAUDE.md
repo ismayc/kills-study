@@ -1,7 +1,7 @@
 # Kills study
 
 Is a "kill" (three straight defensive stops) a measure beyond a defense's
-stop rate? NBA 2000-01 to 2024-25 and WNBA 2009 to 2025. Personal research in
+stop rate? NBA 2000-01 to 2025-26 and WNBA 2009 to 2026. Personal research in
 the basketball-data-science family (backlog: `../hub/ideas/historical-analysis-ideas.md`,
 "kills, three defensive stops in a row"). Decisions and their dates:
 `docs/design.md`. Private repo.
@@ -20,8 +20,9 @@ the basketball-data-science family (backlog: `../hub/ideas/historical-analysis-i
   floor(run / 3); streaks carry across quarters, reset at the final buzzer.
 - **Known issues:** archive clock floored to whole seconds (compare on
   floored V3 time); free throws outside any possession are unassigned; NBA
-  2025-26 and WNBA 2026 have only live builds with unreliable period-start
-  offense, so they are out.
+  2025-26 and WNBA 2026 come from playbyplay-study's live builds with two
+  corrections (`lib.live_possessions`), gated by `python/06_source_check.py`
+  on the four overlap seasons. Never add a live season without that gate.
 - **Sources of truth:** each team-game's scored points (V3, itself checked
   against LeagueGameLog finals).
 - **Suspicious results:** points captured under 99.5% in a season, a streak

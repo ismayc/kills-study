@@ -9,6 +9,17 @@ OPPONENT). OPPONENT is the defense's abbreviation; it is matched to the
 game's two LeagueGameLog abbreviations, and the other team is the offense.
 Times are whole seconds left in the period (the archive floors them).
 
+The two seasons the archive lacks (NBA 2025-26, WNBA 2026) come from
+playbyplay-study's builds with the pbpstats library on the liveData feed
+(LIVE), with two corrections that make those builds match the archive on
+the four seasons both cover (python/06_source_check.py):
+  1. possessions with no field-goal attempt, turnover, or free-throw attempt
+     are dropped (mostly 0:00 stubs at period ends, which the archive omits);
+  2. each period-start possession's offense is the team of the first field
+     goal attempt or turnover in its window, because the live builds name
+     the wrong offense there (37% of period-start scoring rows in NBA
+     2023-24; see playbyplay-study and elam-ending-study).
+
 Points
 ------
 Each scoring event in the shared PlayByPlayV3 layer (the rise in its team's
@@ -54,8 +65,56 @@ FAMILY = ROOT.parent
 sys.path.insert(0, str(FAMILY / "basketball-analysis-tools"))
 import pbp_history  # noqa: E402
 
-YEARS = {"nba": range(2000, 2025), "wnba": range(2009, 2026)}
+YEARS = {"nba": range(2000, 2026), "wnba": range(2009, 2027)}
 RAW_COLS = ["GAMEID", "PERIOD", "STARTTIME", "ENDTIME", "OPPONENT"]
+LIVE_DIR = FAMILY / "playbyplay-study" / "data" / "possessions"
+# Seasons read from the live builds, and the overlap seasons that check them.
+LIVE = {("nba", 2025): "nba_2025-26", ("wnba", 2026): "wnba_2026"}
+OVERLAP = {("nba", 2023): "nba_2023-24", ("nba", 2024): "nba_2024-25",
+           ("wnba", 2024): "wnba_2024", ("wnba", 2025): "wnba_2025"}
+LIVE_COLS = ["game_id", "PERIOD", "start_secs", "end_secs", "offense_team_id",
+             "FGA", "TURNOVERS", "FTA"]
+
+
+def source(league: str, year: int) -> str:
+    return "live" if (league, year) in LIVE else "archive"
+
+
+def live_raw(name: str) -> pl.DataFrame:
+    """A live build's possession rows, the columns used, as stored."""
+    return pl.read_parquet(LIVE_DIR / f"{name}.parquet", columns=LIVE_COLS)
+
+
+def live_possessions(raw: pl.DataFrame, finals: pl.DataFrame, ev: pl.DataFrame) -> pl.DataFrame:
+    """Typed possessions from a live build, in possessions()' schema, with the
+    two corrections in the module docstring. ev: prepared events (gameId,
+    seq, period, secs_left, isFieldGoal, actionType, teamId)."""
+    ok = finals.filter(pl.col("status") == "ok").select("gameId", "home_id", "away_id")
+    p = (raw.filter((pl.col("FGA") + pl.col("TURNOVERS") + pl.col("FTA")) > 0)
+            .select(gameId=pl.col("game_id").cast(pl.Utf8).str.zfill(10),
+                    period=pl.col("PERIOD").cast(pl.Int32), start="start_secs", end="end_secs",
+                    listed=pl.col("offense_team_id").cast(pl.Int64))
+            .join(ok, on="gameId", how="inner"))
+    p = p.with_columns(pstart=pl.col("start") == pl.col("start").max().over("gameId", "period"))
+    acts = (ev.filter(((pl.col("isFieldGoal") == 1) | (pl.col("actionType") == "Turnover"))
+                      & (pl.col("teamId") > 0))
+              .select("gameId", "seq", "period", t=pl.col("secs_left").floor(), team="teamId"))
+    first = (p.filter("pstart").select("gameId", "period", "start", "end")
+              .join(acts, on=["gameId", "period"], how="inner")
+              .filter((pl.col("t") <= pl.col("start")) & (pl.col("t") >= pl.col("end")))
+              .sort("gameId", "period", "seq")
+              .group_by("gameId", "period", maintain_order=True).first()
+              .select("gameId", "period", "start", first_team="team"))
+    p = (p.join(first, on=["gameId", "period", "start"], how="left")
+          .with_columns(off=pl.when(pl.col("pstart") & pl.col("first_team").is_not_null())
+                              .then(pl.col("first_team")).otherwise(pl.col("listed"))))
+    p = p.with_columns(
+        abbr_ok=(pl.col("off") == pl.col("home_id")) | (pl.col("off") == pl.col("away_id")))
+    p = p.with_columns(dfn=pl.when(pl.col("off") == pl.col("home_id")).then(pl.col("away_id"))
+                             .when(pl.col("off") == pl.col("away_id")).then(pl.col("home_id")))
+    p = p.sort(["gameId", "period", "start", "end", "off"], descending=[False, False, True, True, False])
+    p = p.with_columns(ord=pl.int_range(pl.len()).over("gameId").cast(pl.Int32))
+    return p.select("gameId", "period", "start", "end", "off", "dfn", "ord", "abbr_ok")
 
 
 def mmss(col: str) -> pl.Expr:

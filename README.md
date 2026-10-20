@@ -2,13 +2,14 @@
 
 A "kill" is three defensive stops in a row: coach and broadcast vocabulary
 with no official stat behind it. This study counts every kill in the NBA
-from 2000-01 to 2024-25 and the WNBA from 2009 to 2025, ranks the team
+from 2000-01 to 2025-26 and the WNBA from 2009 to 2026, ranks the team
 defenses that piled them up, keeps a record book of the longest stop
 streaks, and tests whether a kill measures anything a defense's stop rate
 does not.
 
 A stop is an opponent possession that scores no points. Possessions come
-from the pbpstats possession archive, so an offensive rebound continues a
+from the pbpstats possession archive (the two newest seasons from corrected
+live-feed builds; see Results), so an offensive rebound continues a
 possession rather than starting a new one; points come from the PlayByPlayV3
 score timeline, assigned to the scoring team's possession. Streaks carry
 across quarters and reset at the final buzzer, and a run of six straight
@@ -23,20 +24,38 @@ licenses: `DATA_SOURCES.md`. Private repo; not yet on the family hub.
 ## Results
 
 <!-- gen:results -->
-Coverage: 29,967 NBA games (2000-01 to 2024-25) and 3,550 WNBA games (2009 to 2025), 6,246,291 possessions, every archive game whose score passes the shared layer's checks (12 such games are missing from the possession archive). Possession points capture at least 99.87% of every season's points; the rest are free throws that belong to no possession (technicals, a period's first second). Every table is computed in Python and again in R, and the two agree on every cell.
+Coverage: 31,197 NBA games (2000-01 to 2025-26) and 3,880 WNBA games (2009 to 2026), 6,543,543 possessions, every game whose score passes the shared layer's checks (12 such games are missing from the possession sources). Possession points capture at least 99.86% of every season's points; the rest are free throws that belong to no possession (technicals, a period's first second). Every table is computed in Python and again in R, and the two agree on every cell.
+
+**Two possession sources.** NBA 2025-26 and WNBA 2026 are not in the pbpstats archive and come from playbyplay-study's live-feed builds, corrected two ways (empty end-of-period stubs dropped; each period-start possession given to the team that first shoots or turns it over). On the four seasons both sources cover, the corrected builds reproduce the archive's team kill rates:
+
+| Season | Builds | Offense agrees | League kills vs archive | Team kill-rate correlation | Mean team difference (per 100) | Largest team difference |
+|---|---|---|---|---|---|---|
+| NBA 2023-24 | as stored | 99.24% | +7.34% | 0.9884 | +0.382 | 0.578 |
+| NBA 2023-24 | corrected | 99.94% | +0.45% | 0.9977 | +0.024 | 0.091 |
+| NBA 2024-25 | as stored | 99.22% | +6.43% | 0.9845 | +0.351 | 0.599 |
+| NBA 2024-25 | corrected | 99.94% | +0.39% | 0.9957 | +0.029 | 0.156 |
+| WNBA 2024 | as stored | 99.19% | +7.80% | 0.9904 | +0.435 | 0.638 |
+| WNBA 2024 | corrected | 99.94% | +0.23% | 0.9967 | -0.018 | 0.218 |
+| WNBA 2025 | as stored | 99.05% | +8.30% | 0.9706 | +0.421 | 0.800 |
+| WNBA 2025 | corrected | 99.89% | +1.42% | 0.9962 | +0.022 | 0.152 |
+
+Uncorrected, the builds would add about 0.40 kills per 100 to every team, a false jump in the newest seasons. Spread across teams is 0.47 to 0.97 per 100, for scale.
+
+- NBA 2025-26: kills per 100 went from 6.75 to 6.51 (-0.25), against a builder difference of at most 0.029 on the overlap seasons; points per 100 opponent possessions went from 114.8 to 116.2.
+- WNBA 2026: kills per 100 went from 8.01 to 7.33 (-0.67), against a builder difference of at most 0.022 on the overlap seasons; points per 100 opponent possessions went from 104.5 to 108.9.
 
 ### 1. What a kill measures beyond the stop rate
 
-Across team-seasons, the correlation between stop rate and kill rate is 0.947 in the NBA and 0.925 in the WNBA: stop rate alone explains 90% and 86% of the variation in kill rate.
+Across team-seasons, the correlation between stop rate and kill rate is 0.948 in the NBA and 0.929 in the WNBA: stop rate alone explains 90% and 86% of the variation in kill rate.
 
 The sharper test holds each game's stops fixed and asks whether they cluster: against every ordering of a game's own stops being equally likely, how many kills should a team have had? (This baseline already absorbs opponent strength, pace, and blowouts, because it keeps each game's stop count.)
 
 | League | Team-seasons | Kills | Excess over random order | z | Team-seasons with abs(z) > 1.96 |
 |---|---|---|---|---|---|
-| NBA | 746 | 391,744 | -767 (-0.20%) | -2.20 | 5.4% |
-| WNBA | 206 | 44,445 | +66 (+0.15%) | +0.59 | 4.4% |
+| NBA | 776 | 407,654 | -661 (-0.16%) | -1.85 | 5.5% |
+| WNBA | 221 | 48,310 | +96 (+0.20%) | +0.83 | 4.5% |
 
-About 5% of team-seasons would pass 1.96 by chance alone; 5.4% and 4.4% do. So no team's defense strings its stops together more than its stop rate implies. The WNBA's pooled count sits at chance (z +0.59). The NBA's is slightly below it (z -2.20; 18 of 25 seasons below zero): stops alternate with scores a little more often than random order would give, by a fraction of a percent. The cause is not tested here.
+About 5% of team-seasons would pass 1.96 by chance alone; 5.5% and 4.5% do. So no team's defense strings its stops together more than its stop rate implies. The WNBA's pooled count sits at chance (z +0.83). The NBA's is slightly below it (z -1.85; 18 of 26 seasons below zero): stops alternate with scores a little more often than random order would give, by a fraction of a percent. The cause is not tested here.
 
 ![Kill rate against stop rate](figures/fig1_kill_vs_stop_py.png)
 
@@ -108,18 +127,20 @@ Longest runs of opponent possessions without a point (a streak carries across qu
 | 7 | 2022-08-02 | CON | PHO | 16 | 3:32 Q1 | 6:40 Q2 | -3 |
 | 8 | 2023-05-21 | IND | NYL | 16 | 8:41 Q4 | 0:56 Q4 | -32 |
 | 9 | 2025-06-29 | MIN | CON | 16 | 0:34 Q1 | 3:02 Q2 | +8 |
-| 10 | 2009-06-08 | DET | LAS | 15 | 8:35 Q1 | 1:34 Q1 | -3 |
+| 10 | 2026-06-22 | PHX | IND | 16 | 9:09 Q1 | 0:16 Q1 | -3 |
 
 The longest streak of every season: `output/season_records.csv`; the top 25 per league: `output/records.csv`.
 <!-- /gen:results -->
 
 ## Limits
 
-- Seasons: the possession archive covers NBA 2000-01 to 2024-25 and WNBA
-  2009 to 2025. NBA 2025-26 and WNBA 2026 exist only as live-feed builds in
-  playbyplay-study, whose period-start possessions name the wrong offense
-  often enough to break streaks, so they are left out until those builds are
-  checked against the archive.
+- Seasons: the pbpstats archive covers NBA 2000-01 to 2024-25 and WNBA 2009
+  to 2025. NBA 2025-26 and WNBA 2026 come from a different builder (the
+  pbpstats library on the liveData feed, run by playbyplay-study), corrected
+  and checked against the archive on four overlap seasons (the table in
+  Results). Its team kill rates differ from the archive's by a few
+  hundredths of a kill per 100 on average, so a change that small into the
+  newest season can be the builder rather than the game.
 - Every possession counts, including end-of-quarter heaves, which are nearly
   always stops. That is how a broadcast would count, and it raises every
   team's kills about equally.
@@ -143,6 +164,7 @@ python python/01_possessions.py   # possessions with points, validation
 python python/02_kills.py         # kills, baselines, records, leaders
 Rscript R/kills.R                 # the same, independently, in R (~2 min)
 python python/03_reconcile.py     # Python against R, every cell
+python python/06_source_check.py  # live builds against the archive, four seasons
 python python/04_figures.py       # figures/
 python python/05_report.py        # this README's results
 bash run_checks.sh                # every gate

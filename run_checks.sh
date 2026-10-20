@@ -19,6 +19,10 @@ echo "=== possessions: points coverage and abbreviation matches ==="
 $PY -I python/01_possessions.py --check | tail -1
 
 echo
+echo "=== sources: corrected live builds against the archive ==="
+$PY -I python/06_source_check.py --check | tail -1
+
+echo
 echo "=== kills: team seasons, baselines, records reproduce ==="
 $PY -I python/02_kills.py --check | tail -1
 

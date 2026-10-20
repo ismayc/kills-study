@@ -109,3 +109,28 @@ def test_frames_match_tolerates_noise_but_not_differences(lib):
     assert not lib.frames_match(a, a.with_columns(pl.lit("z").alias("k")))
     assert not lib.frames_match(a, a.head(1))
     assert not lib.frames_match(a, a.with_columns(pl.lit(None, pl.Float64).alias("v")))
+
+
+def live_fixture():
+    raw = pl.DataFrame({
+        "game_id": [22500001] * 5, "PERIOD": [1, 1, 1, 2, 2],
+        "start_secs": [720.0, 700.0, 0.0, 720.0, 690.0], "end_secs": [700.0, 690.0, 0.0, 690.0, 670.0],
+        # Period 1 starts listed as team 1 (wrong); the 0:00 stub is empty;
+        # period 2's start has no field-goal attempt or turnover, so its
+        # listed offense stands.
+        "offense_team_id": [1, 1, 2, 2, 1], "FGA": [1, 1, 0, 0, 1], "TURNOVERS": [0, 0, 0, 0, 0],
+        "FTA": [0, 0, 0, 2, 0]})
+    fin = pl.DataFrame({"gameId": ["0022500001"], "status": ["ok"], "home_id": [1], "away_id": [2]})
+    ev = pl.DataFrame({"gameId": ["0022500001"] * 3, "seq": [1, 2, 3], "period": [1, 1, 2],
+                       "secs_left": [710.4, 695.0, 700.0], "isFieldGoal": [1, 1, 0],
+                       "actionType": ["Missed Shot", "Made Shot", "Free Throw"], "teamId": [2, 1, 2]})
+    return raw, fin, ev
+
+
+def test_live_possessions_drop_stubs_and_fix_period_starts(lib):
+    raw, fin, ev = live_fixture()
+    p = lib.live_possessions(raw, fin, ev)
+    assert p.select("period", "start", "end", "off", "dfn", "ord").rows() == [
+        (1, 720.0, 700.0, 2, 1, 0), (1, 700.0, 690.0, 1, 2, 1),
+        (2, 720.0, 690.0, 2, 1, 2), (2, 690.0, 670.0, 1, 2, 3)]
+    assert p["abbr_ok"].all()

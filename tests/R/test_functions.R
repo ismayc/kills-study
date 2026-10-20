@@ -69,3 +69,20 @@ test_that("streak table", {
   expect_equal(st$first_ord, c(0, 8))
   expect_equal(st$last_ord, c(4, 14))
 })
+
+test_that("live possessions drop stubs and fix period starts", {
+  raw <- tibble::tibble(game_id = rep(22500001, 5), PERIOD = c(1, 1, 1, 2, 2),
+                        start_secs = c(720, 700, 0, 720, 690), end_secs = c(700, 690, 0, 690, 670),
+                        offense_team_id = c(1, 1, 2, 2, 1), FGA = c(1, 1, 0, 0, 1),
+                        TURNOVERS = rep(0, 5), FTA = c(0, 0, 0, 2, 0))
+  fin <- tibble::tibble(gameId = "0022500001", status = "ok", home_id = 1, away_id = 2)
+  ev <- tibble::tibble(gameId = "0022500001", seq = 1:3, period = c(1L, 1L, 2L),
+                       secs_left = c(710.4, 695, 700), isFieldGoal = c(1, 1, 0),
+                       actionType = c("Missed Shot", "Made Shot", "Free Throw"), teamId = c(2, 1, 2))
+  p <- live_possessions(raw, fin, ev)
+  expect_equal(p$start, c(720, 700, 720, 690))
+  expect_equal(p$off, c(2, 1, 2, 1))
+  expect_equal(p$dfn, c(1, 2, 1, 2))
+  expect_equal(p$ord, 0:3)
+  expect_true(all(p$abbr_ok))
+})

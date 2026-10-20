@@ -3,7 +3,7 @@
 
 suppressPackageStartupMessages(library(dplyr))
 
-YEARS <- list(nba = 2000:2024, wnba = 2009:2025)
+YEARS <- list(nba = 2000:2025, wnba = 2009:2026)
 
 season_label <- function(league, year) {
   if (league == "nba") sprintf("%d-%02d", year, (year + 1) %% 100) else as.character(year)
@@ -101,4 +101,35 @@ streak_table <- function(seq) {
     filter(stop == 1) |> group_by(gameId, dfn, brk) |>
     summarise(length = n(), first_ord = first(ord), last_ord = last(ord), .groups = "drop") |>
     select(-brk)
+}
+
+LIVE <- c("nba_2025" = "nba_2025-26", "wnba_2026" = "wnba_2026")
+
+# A live build's possessions in possessions()' schema, with the two
+# corrections in python/lib.py: drop possessions with no field-goal attempt,
+# turnover, or free-throw attempt; give each period-start possession to the
+# team of the first field-goal attempt or turnover in its window.
+live_possessions <- function(raw, finals, ev) {
+  ok <- finals |> filter(status == "ok") |> select(gameId, home_id, away_id)
+  p <- raw |> filter(FGA + TURNOVERS + FTA > 0) |>
+    transmute(gameId = gsub(" ", "0", sprintf("%010s", as.character(game_id))),
+              period = as.integer(PERIOD), start = start_secs, end = end_secs,
+              listed = as.numeric(offense_team_id)) |>
+    inner_join(ok, by = "gameId") |>
+    group_by(gameId, period) |> mutate(pstart = start == max(start)) |> ungroup()
+  acts <- ev |> filter(isFieldGoal == 1 | actionType == "Turnover", teamId > 0) |>
+    transmute(gameId, seq, period, t = floor(secs_left), team = teamId)
+  first <- p |> filter(pstart) |> select(gameId, period, start, end) |>
+    inner_join(acts, by = c("gameId", "period"), relationship = "many-to-many") |>
+    filter(t <= start, t >= end) |>
+    arrange(gameId, period, seq) |>
+    group_by(gameId, period) |> slice(1) |> ungroup() |>
+    select(gameId, period, start, first_team = team)
+  p |> left_join(first, by = c("gameId", "period", "start")) |>
+    mutate(off = ifelse(pstart & !is.na(first_team), first_team, listed),
+           abbr_ok = off == home_id | off == away_id,
+           dfn = case_when(off == home_id ~ away_id, off == away_id ~ home_id)) |>
+    arrange(gameId, period, desc(start), desc(end), off) |>
+    group_by(gameId) |> mutate(ord = as.integer(row_number() - 1L)) |> ungroup() |>
+    select(gameId, period, start, end, off, dfn, ord, abbr_ok)
 }

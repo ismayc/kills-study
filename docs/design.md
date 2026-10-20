@@ -33,13 +33,26 @@ Made while building (October 19, 2026), each for the reason given:
    offense on 37% of their scoring rows; in the archive the listed defense
    scores on 0.5-1.2% of period-start scoring rows (NBA 2024-25, NBA 2000-01,
    WNBA 2009 checked), no worse than other possessions. The live-build seasons
-   (NBA 2025-26, WNBA 2026) are left out for that reason.
+   (NBA 2025-26, WNBA 2026) were left out of the first build for that reason.
 6. **The game-level baseline is a random permutation, not p = S / n.** A
    first version plugged each game's stop rate into the independence model and
    found kills 1-4 standard deviations below expectation in every NBA season;
    that came from the plug-in, which puts three straight stops at p cubed
    instead of the exact S(S-1)(S-2) / (n(n-1)(n-2)). See
    `docs/findings/plug-in-baseline-overstates-runs.md`.
+
+7. **NBA 2025-26 and WNBA 2026 added from corrected live builds** (Chester
+   chose this on October 19, 2026, provided the builds were first checked
+   against the archive). As stored, the live builds disagree with the archive
+   two ways: about 1% more possessions, mostly empty 0:00 stubs at period
+   ends, and the wrong offense on period-start possessions. Dropping
+   possessions with no field-goal attempt, turnover, or free-throw attempt,
+   and giving each period-start possession to the team of its first
+   field-goal attempt or turnover, brings team kill rates on the four
+   overlap seasons to a correlation of at least 0.995 with the archive's.
+   `python/06_source_check.py` holds that check as a gate
+   (`output/source_check.csv`); see
+   `docs/findings/live-builds-match-archive-after-two-corrections.md`.
 
 ## Data checks
 

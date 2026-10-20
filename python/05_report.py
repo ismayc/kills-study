@@ -35,16 +35,57 @@ def results() -> str:
                                   pl.col("points_captured").min().alias("worst"))
     vv = {r["league"]: r for r in v.iter_rows(named=True)}
     s = {r["league"]: r for r in su.iter_rows(named=True)}
+    span = {lg: va.filter(pl.col("league") == lg).sort("year")["season"].to_list() for lg in LEAGUE}
+    live = va.filter(pl.col("source") == "live")
+    sc = pl.read_csv(OUT / "source_check.csv")
     lines = [
-        f"Coverage: {vv['nba']['games']:,} NBA games (2000-01 to 2024-25) and "
-        f"{vv['wnba']['games']:,} WNBA games (2009 to 2025), "
+        f"Coverage: {vv['nba']['games']:,} NBA games ({span['nba'][0]} to {span['nba'][-1]}) and "
+        f"{vv['wnba']['games']:,} WNBA games ({span['wnba'][0]} to {span['wnba'][-1]}), "
         f"{vv['nba']['possessions'] + vv['wnba']['possessions']:,} possessions, every "
-        "archive game whose score passes the shared layer's checks "
+        "game whose score passes the shared layer's checks "
         f"({vv['nba']['games_ok'] - vv['nba']['games'] + vv['wnba']['games_ok'] - vv['wnba']['games']} "
-        "such games are missing from the possession archive). Possession points capture at least "
+        "such games are missing from the possession sources). Possession points capture at least "
         f"{min(vv['nba']['worst'], vv['wnba']['worst']):.2%} of every season's points; the rest are "
         "free throws that belong to no possession (technicals, a period's first second). "
         "Every table is computed in Python and again in R, and the two agree on every cell.",
+        "",
+        "**Two possession sources.** "
+        + " and ".join(f"{LEAGUE[r['league']]} {r['season']}" for r in live.iter_rows(named=True))
+        + " are not in the pbpstats archive and come from playbyplay-study's live-feed builds, "
+        "corrected two ways (empty end-of-period stubs dropped; each period-start possession "
+        "given to the team that first shoots or turns it over). On the four seasons both "
+        "sources cover, the corrected builds reproduce the archive's team kill rates:",
+        "",
+        "| Season | Builds | Offense agrees | League kills vs archive | Team kill-rate correlation | Mean team difference (per 100) | Largest team difference |",
+        "|---|---|---|---|---|---|---|",
+    ]
+    for r in sc.sort("league", "year", "corrected").iter_rows(named=True):
+        lines.append(f"| {LEAGUE[r['league']]} {r['season']} | {'corrected' if r['corrected'] else 'as stored'} | "
+                     f"{r['offense_agrees']:.2%} | {r['kills_diff']:+.2%} | {r['rate_corr']:.4f} | "
+                     f"{r['rate_mean_diff']:+.3f} | {r['rate_max_abs_diff']:.3f} |")
+    lines += [
+        "",
+        "Uncorrected, the builds would add about "
+        f"{sc.filter(~pl.col('corrected'))['rate_mean_diff'].mean():.2f} kills per 100 to every team, "
+        "a false jump in the newest seasons. Spread across teams is "
+        f"{sc['rate_sd'].min():.2f} to {sc['rate_sd'].max():.2f} per 100, for scale.",
+        "",
+    ]
+    ts = pl.read_csv(OUT / "team_seasons.csv")
+    for r in live.iter_rows(named=True):
+        lg, y = r["league"], r["year"]
+        cur = ls.filter((pl.col("league") == lg) & (pl.col("year") == y)).row(0, named=True)
+        prev = ls.filter((pl.col("league") == lg) & (pl.col("year") == y - 1)).row(0, named=True)
+        pp = ts.filter((pl.col("league") == lg) & pl.col("year").is_in([y - 1, y])).group_by("year").agg(
+            pl.col("opp_poss").sum(), pts=(pl.col("pts_allowed_per100") * pl.col("opp_poss") / 100).sum()
+        ).sort("year").with_columns(per100=100 * pl.col("pts") / pl.col("opp_poss"))["per100"].to_list()
+        bias = sc.filter(pl.col("corrected") & (pl.col("league") == lg))["rate_mean_diff"].abs().max()
+        lines.append(
+            f"- {LEAGUE[lg]} {r['season']}: kills per 100 went from {prev['kill_rate']:.2f} to "
+            f"{cur['kill_rate']:.2f} ({cur['kill_rate'] - prev['kill_rate']:+.2f}), against a builder "
+            f"difference of at most {bias:.3f} on the overlap seasons; points per 100 opponent "
+            f"possessions went from {pp[0]:.1f} to {pp[1]:.1f}.")
+    lines += [
         "",
         "### 1. What a kill measures beyond the stop rate",
         "",

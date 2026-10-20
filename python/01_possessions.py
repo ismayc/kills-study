@@ -1,13 +1,14 @@
-"""Possessions with points, for every archive season (NBA 2000-01 to 2024-25,
-WNBA 2009 to 2025) and every game whose score passes the shared layer's
-checks. Definitions in python/lib.py.
+"""Possessions with points, for every season (NBA 2000-01 to 2025-26, WNBA
+2009 to 2026) and every game whose score passes the shared layer's checks.
+The archive supplies every season but NBA 2025-26 and WNBA 2026, which come
+from playbyplay-study's live builds with the corrections in python/lib.py.
 
 Writes (local, gitignored):
-  data/raw_possessions/<league>_<year>.parquet  the archive's possession rows
+  data/raw_possessions/<league>_<year>.parquet  the source's possession rows
                                                 as read (R reads these)
   data/possessions/<league>_<year>.parquet      typed possessions with pts
 Writes (committed): output/validation.csv, one row per league-season:
-  games, possessions, abbr_unmatched, points_captured (share of all scored
+  source (archive or live), games, possessions, abbr_unmatched, points_captured (share of all scored
   points assigned to a possession), team_games_exact (share of team-games
   whose possession points equal their total), unassigned (scoring events in
   no possession).
@@ -29,16 +30,20 @@ RAW = lib.ROOT / "data" / "raw_possessions"
 POSS = lib.ROOT / "data" / "possessions"
 VALID = lib.ROOT / "output" / "validation.csv"
 EV_COLS = ["gameId", "seq", "period", "secs_left", "actionType", "location",
-           "score_h", "score_a", "home_id", "away_id"]
+           "score_h", "score_a", "home_id", "away_id", "isFieldGoal", "teamId"]
 
 
 def season(league: str, year: int, write: bool) -> dict:
-    raw = lib.archive_possessions(league, year)
     fin = lib.pbp_history.load_finals(league, [year])
-    poss = lib.possessions(raw, fin)
     ok = fin.filter(pl.col("status") == "ok").select("gameId")
-    ev = pl.read_parquet(lib.pbp_history.events_path(league, year), columns=EV_COLS).join(
-        poss.select("gameId").unique(), on="gameId", how="semi")
+    ev_all = pl.read_parquet(lib.pbp_history.events_path(league, year), columns=EV_COLS)
+    if lib.source(league, year) == "live":
+        raw = lib.live_raw(lib.LIVE[(league, year)])
+        poss = lib.live_possessions(raw, fin, ev_all)
+    else:
+        raw = lib.archive_possessions(league, year)
+        poss = lib.possessions(raw, fin)
+    ev = ev_all.join(poss.select("gameId").unique(), on="gameId", how="semi")
     sc = lib.scoring_events(ev)
     out, unassigned = lib.attribute_points(poss, sc)
     tot = sc.group_by("gameId", "team").agg(all=pl.col("pts").sum())
@@ -50,7 +55,7 @@ def season(league: str, year: int, write: bool) -> dict:
         raw.write_parquet(RAW / f"{league}_{year}.parquet")
         out.write_parquet(POSS / f"{league}_{year}.parquet")
     return {"league": league, "year": year,
-            "season": lib.pbp_history.season_label(league, year),
+            "season": lib.pbp_history.season_label(league, year), "source": lib.source(league, year),
             "games_ok": ok.height, "games": poss["gameId"].n_unique(), "possessions": poss.height,
             "abbr_unmatched": int((~poss["abbr_ok"]).sum()),
             "points_captured": round(float(cmp["pts"].sum() / cmp["all"].sum()), 12),
