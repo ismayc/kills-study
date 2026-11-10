@@ -29,8 +29,10 @@ The counting does leave a record book worth keeping.
 ## Counting a stat that nobody keeps
 
 A stop is an opponent possession that scores no points. Possessions come
-from the pbpstats possession archive, so an offensive rebound continues a
-possession rather than starting a new one, and points come from the league's
+from a public archive of NBA and WNBA play-by-play that is already split
+into possessions (built with the open-source pbpstats library), so an
+offensive rebound continues a possession rather than starting a new one,
+and points come from the league's
 play-by-play score timeline. Every three straight stops is a kill: six in a
 row are two kills, and five are one. A streak carries across quarters and
 ends at the final buzzer. These rules were set on October 19, 2026, before
@@ -38,7 +40,7 @@ anything was counted, so the results could not shape the definition.
 
 {{svg:dg_kill_rules|A real stretch of Houston's defense against Portland on November 22, 2024, one cell per Portland possession. Six straight stops that straddle the break between the third and fourth quarters make two kills, because the count carries over (a reset would leave one). The next five straight stops make one kill, and the last two start nothing.}}
 
-The archive stops at NBA 2024-25 and WNBA 2025. The two newest seasons come
+That archive stops at NBA 2024-25 and WNBA 2025. The two newest seasons come
 from a second possession builder, corrected two ways and checked against
 the archive on four seasons both sources cover (the last section below).
 Possession points capture at least 99.85% of every season's points; the rest
