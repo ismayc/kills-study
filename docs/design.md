@@ -13,7 +13,7 @@ record? From the backlog idea "kills, three defensive stops in a row"
 Made by Chester Ismay on October 19, 2026, before any result was computed:
 
 1. **Its own private repo**, one of three studies built on the shared
-   PlayByPlayV3 layer.
+   PlayByPlayV3 layer. (Made public, with a hub card, on November 10, 2026.)
 2. **Full history** the possession archive allows: NBA 2000-01 to 2024-25,
    WNBA 2009 to 2025, regular season.
 3. **Every three stops is a kill**: six straight stops are two kills, five
@@ -38,8 +38,8 @@ Made while building (October 19, 2026), each for the reason given:
    first version plugged each game's stop rate into the independence model and
    found kills 1-4 standard deviations below expectation in every NBA season;
    that came from the plug-in, which puts three straight stops at p cubed
-   instead of the exact S(S-1)(S-2) / (n(n-1)(n-2)). See
-   `docs/findings/plug-in-baseline-overstates-runs.md`.
+   instead of the exact S(S-1)(S-2) / (n(n-1)(n-2)). Both dynamic programs
+   match brute-force enumeration in Python and R (`tests/`).
 
 7. **NBA 2025-26 and WNBA 2026 added from corrected live builds** (Chester
    chose this on October 19, 2026, provided the builds were first checked
@@ -51,8 +51,7 @@ Made while building (October 19, 2026), each for the reason given:
    field-goal attempt or turnover, brings team kill rates on the four
    overlap seasons to a correlation of at least 0.995 with the archive's.
    `python/06_source_check.py` holds that check as a gate
-   (`output/source_check.csv`); see
-   `docs/findings/live-builds-match-archive-after-two-corrections.md`.
+   (`output/source_check.csv`).
 
 ## Data checks
 

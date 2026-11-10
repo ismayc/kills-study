@@ -19,7 +19,13 @@ at the team's season rate, and one with each game's own stops in a random
 order.
 
 Design, decisions, and data checks: `docs/design.md`. Data sources and
-licenses: `DATA_SOURCES.md`. Private repo; not yet on the family hub.
+licenses: `DATA_SOURCES.md`. Family page: https://ismayc.github.io/kills-study/
+
+<!-- terms -->
+> **Terms used in this analysis.** Dotted-underlined terms anywhere below repeat these definitions on hover ([full glossary](https://github.com/ismayc/basketball-data-science/blob/main/docs/glossary.md)).
+>
+> *(no specialized metric terms in this document)*
+<!-- /terms -->
 
 ## Results
 

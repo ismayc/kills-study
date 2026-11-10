@@ -4,7 +4,7 @@ Is a "kill" (three straight defensive stops) a measure beyond a defense's
 stop rate? NBA 2000-01 to 2025-26 and WNBA 2009 to 2026. Personal research in
 the basketball-data-science family (backlog: `../hub/ideas/historical-analysis-ideas.md`,
 "kills, three defensive stops in a row"). Decisions and their dates:
-`docs/design.md`. Private repo.
+`docs/design.md`. Public repo; keep findings and working notes out of it.
 
 ## Data context
 
@@ -40,7 +40,7 @@ Data sources and licenses: `DATA_SOURCES.md`. Raw rows stay local.
 - Python and R agree on every reconciled cell within 1e-9: methods are exact
   DPs, no simulation.
 - Streak tests that condition on an observed count use the permutation
-  baseline, never a plug-in rate (`docs/findings/`).
+  baseline, never a plug-in rate (`docs/design.md`, decision 6).
 - README results are generated (`python/05_report.py`); never type a number
   into them.
 - **Plan mode first** for any step that drops games or possessions, changes
