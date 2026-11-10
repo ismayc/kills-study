@@ -1,7 +1,7 @@
 # kills-study docs/story.md: z threshold, calendar dates, and the design date
 1.96  # the two-sided 95% z threshold, fixed by design (docs/design.md)
 5% @ About  # the nominal two-sided rate at z 1.96, a property of the normal curve
-19 @ fixed on October  # date the rules were fixed (docs/design.md, October 19, 2026)
+19 @ set on October  # date the rules were set (docs/design.md, October 19, 2026)
 22 @ against Portland on November  # game date 2024-11-22, matches output/example_strip.csv game_date
 1 @ On March  # record game date 2006-03-01, matches output/records.csv game_date
 1 @ through the March  # record game date 2006-03-01, matches output/records.csv game_date

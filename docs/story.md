@@ -33,8 +33,8 @@ from the pbpstats possession archive, so an offensive rebound continues a
 possession rather than starting a new one, and points come from the league's
 play-by-play score timeline. Every three straight stops is a kill: six in a
 row are two kills, and five are one. A streak carries across quarters and
-ends at the final buzzer. These rules were fixed on October 19, 2026,
-before any result was computed.
+ends at the final buzzer. These rules were set on October 19, 2026, before
+anything was counted, so the results could not shape the definition.
 
 {{svg:dg_kill_rules|A real stretch of Houston's defense against Portland on November 22, 2024, one cell per Portland possession. Six straight stops that straddle the break between the third and fourth quarters make two kills, because the count carries over (a reset would leave one). The next five straight stops make one kill, and the last two start nothing.}}
 
